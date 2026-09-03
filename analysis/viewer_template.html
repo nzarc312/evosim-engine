@@ -573,7 +573,7 @@
       f.tick.toLocaleString() + " <span>tick</span>";
     document.getElementById("r-pop").textContent = f.pop.toLocaleString();
     document.getElementById("r-src").textContent =
-      f.src.toLocaleString() + " / " + P.source_slots.toLocaleString();
+      f.src.toLocaleString() + " / " + RUN.source_slots.toLocaleString();
     document.getElementById("r-stock").textContent = Math.round(f.stock).toLocaleString();
     document.getElementById("r-greed").textContent = f.pop ? f.greed.toFixed(3) : "—";
     document.getElementById("r-gsd").textContent = f.pop ? "±" + f.greedSd.toFixed(3) : "—";
