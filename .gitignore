@@ -1,4 +1,7 @@
 build/
-*.csv
-*.png
+build-debug/
 __pycache__/
+# Run artefacts live outside the repo; the plots and benchmark output that the
+# README references are committed on purpose.
+/*.csv
+!analysis/plots/

@@ -1,6 +1,7 @@
 #include "evosim/spatial_grid.hpp"
 
 #include <algorithm>
+#include <chrono>
 #include <cmath>
 
 #include "evosim/thread_pool.hpp"
@@ -53,20 +54,23 @@ void SpatialGrid::build(const double* xs, const double* ys, const uint8_t* activ
             cell_of_[i] = (active && !active[i]) ? kInactive : cell_index(xs[i], ys[i]);
     }
 
-    // The parallel scatter needs a per-chunk histogram, which costs
-    // chunks * n_cells time and memory. That is only a win when cells are dense
-    // relative to the point set; on a sparse grid the histogram dwarfs the
-    // scatter it is meant to accelerate, so the serial path is taken instead.
-    // Both paths produce byte-identical output, so this choice never affects a
-    // state hash -- only the time it takes to get there.
+    // The parallel scatter needs a per-chunk histogram, whose prefix pass costs
+    // chunks * n_cells. Taking it only when that is no larger than the scatter
+    // it accelerates means it needs roughly kNumChunks points per cell -- a
+    // genuinely dense grid. This simulation's food density gives about two
+    // points per cell, so the shipped configuration takes the serial path; see
+    // the note in the README. Both paths emit byte-identical output, so the
+    // choice can never move a state hash, only the time to reach it.
+    last_build_parallel_ = false;
     const bool parallel_scatter =
         pool != nullptr && pool->size() > 1 &&
-        static_cast<uint64_t>(n_cells) * ThreadPool::chunks() <= 8ull * n + (1ull << 16);
+        static_cast<uint64_t>(n_cells) * ThreadPool::chunks() <= static_cast<uint64_t>(n);
 
     cell_starts_.resize(n_cells + 1);
 
     if (!parallel_scatter) {
         // P2 (serial): histogram, then prefix sum into bucket offsets.
+        const auto t0 = std::chrono::steady_clock::now();
         counts_.assign(n_cells + 1, 0u);
         size_t n_active = 0;
         for (size_t i = 0; i < n; ++i) {
@@ -81,6 +85,9 @@ void SpatialGrid::build(const double* xs, const double* ys, const uint8_t* activ
         // P3: scatter. Walking i in ascending order means each cell's bucket
         // ends up sorted by point index, which is what makes the grid's
         // contents independent of how the build was partitioned.
+        last_serial_ms_ =
+            std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - t0).count();
+
         sorted_.resize(n_active);
         counts_.assign(cell_starts_.begin(), cell_starts_.end());   // cursors
         for (size_t i = 0; i < n; ++i) {
@@ -90,6 +97,7 @@ void SpatialGrid::build(const double* xs, const double* ys, const uint8_t* activ
         }
         return;
     }
+    last_build_parallel_ = true;
 
     // P2a (parallel): each chunk histograms only its own slice of the points,
     // into its own row. No sharing, so no atomics and no contention.
@@ -107,6 +115,7 @@ void SpatialGrid::build(const double* xs, const double* ys, const uint8_t* activ
     // each chunk's count into its write cursor. Chunks are contiguous ascending
     // index ranges, so cursors assigned in chunk order give each cell a bucket
     // sorted by point index -- exactly what the serial scatter produces.
+    const auto t0 = std::chrono::steady_clock::now();
     uint32_t running = 0;
     for (size_t k = 0; k < n_cells; ++k) {
         cell_starts_[k] = running;
@@ -118,6 +127,8 @@ void SpatialGrid::build(const double* xs, const double* ys, const uint8_t* activ
         }
     }
     cell_starts_[n_cells] = running;
+    last_serial_ms_ =
+        std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - t0).count();
 
     // P3 (parallel): every chunk writes only into the ranges its own cursors
     // point at, which no other chunk can touch.

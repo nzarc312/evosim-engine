@@ -1,4 +1,6 @@
 #include <chrono>
+#include <cstdio>
+#include <fstream>
 #include <thread>
 #include <cstdint>
 #include <cstdlib>
@@ -20,6 +22,7 @@ struct Options {
     std::vector<std::string> overrides;
     std::string config_path;
     std::string out_path;
+    std::string dump_agents_path;
     uint64_t    seed         = 42;
     uint64_t    ticks        = 10000;
     int         threads      = -1;   // -1 = take from config
@@ -40,9 +43,10 @@ void usage() {
         "  --config PATH     TOML config file (default: built-in defaults)\n"
         "  --set K=V         override one config key, e.g. --set population.initial_agents=50000\n"
         "  --out PATH        write telemetry CSV here\n"
+        "  --dump-agents P   write the final per-agent traits to P as CSV\n"
         "  --headless        run with no renderer and no clock (default)\n"
         "  --naive           use the O(n^2) neighbor path instead of the grid\n"
-        "  --bench           report timing instead of telemetry\n"
+        "  --bench           report a per-phase timing breakdown instead of telemetry\n"
         "  --verify          print the state hash every 1000 ticks\n"
         "  --thread-sweep    run 1,2,4,8,16 threads and compare state hashes\n"
         "  --help\n";
@@ -75,6 +79,8 @@ bool parse_args(int argc, char** argv, Options& o) {
                                      o.out_path = argv[++i]; }
         else if (a == "--set")     { if (!need_value(argc, i, "--set")) return false;
                                      o.overrides.emplace_back(argv[++i]); }
+        else if (a == "--dump-agents") { if (!need_value(argc, i, "--dump-agents")) return false;
+                                     o.dump_agents_path = argv[++i]; }
         else { std::cerr << "evosim: unknown option '" << a << "'\n"; usage(); return false; }
     }
     return true;
@@ -88,14 +94,35 @@ struct RunResult {
     uint64_t hash    = 0;
     double   ms_tick = 0.0;
     size_t   population = 0;
+    bool     agents_written = false;
 };
+
+// Per-agent traits of the surviving population, for the trait-correlation plot.
+// The telemetry CSV only carries means and standard deviations, which cannot
+// show whether two traits co-vary across individuals.
+bool dump_agents(const World& world, const std::string& path) {
+    std::ofstream f(path, std::ios::out | std::ios::trunc);
+    if (!f) return false;
+    f << "id,pos_x,pos_y,energy,speed,size,sense,age\n";
+    const AgentBuffer& a = world.agents();
+    char line[256];
+    for (size_t i = 0; i < a.count(); ++i) {
+        const int n = std::snprintf(line, sizeof(line),
+            "%llu,%.17g,%.17g,%.17g,%.17g,%.17g,%.17g,%u\n",
+            static_cast<unsigned long long>(a.id[i]), a.pos_x[i], a.pos_y[i], a.energy[i],
+            a.gene_speed[i], a.gene_size[i], a.gene_sense[i], a.age[i]);
+        if (n > 0) f.write(line, n);
+    }
+    return static_cast<bool>(f);
+}
 
 // One headless run. No clock, no variable dt, no renderer.
 RunResult run_headless(const Config& cfg, const Options& opt, unsigned threads,
-                       TelemetryWriter* csv, bool verbose) {
+                       TelemetryWriter* csv, bool verbose, const std::string& agent_dump = "") {
     ThreadPool pool(threads);
     World world(cfg, opt.seed, &pool);
     world.set_naive(opt.naive);
+    world.set_profiling(opt.bench);
 
     constexpr uint64_t kTelemetryEvery = 100;
     uint64_t births_acc = 0, deaths_acc = 0;
@@ -151,6 +178,28 @@ RunResult run_headless(const Config& cfg, const Options& opt, unsigned threads,
     r.hash       = world.state_hash();
     r.ms_tick    = secs * 1000.0 / static_cast<double>(opt.ticks ? opt.ticks : 1);
     r.population = world.population();
+
+    if (!agent_dump.empty()) {
+        r.agents_written = dump_agents(world, agent_dump);
+        if (!r.agents_written) std::cerr << "evosim: cannot write " << agent_dump << "\n";
+    }
+
+    if (opt.bench && verbose) {
+        const PhaseTimes& p = world.phase_times();
+        const double n = static_cast<double>(opt.ticks ? opt.ticks : 1);
+        std::printf("\nphase breakdown (ms/tick)\n"
+                    "  P1-P3 grid build   %8.4f   (P2 prefix sum %.4f, serial)\n"
+                    "  P4  agents         %8.4f   parallel\n"
+                    "  P5  claims         %8.4f   SERIAL\n"
+                    "  P6  deaths         %8.4f   parallel\n"
+                    "  P7  compact+repro  %8.4f   SERIAL\n"
+                    "  P8  food respawn   %8.4f   SERIAL\n"
+                    "  total              %8.4f\n"
+                    "  serial fraction    %7.2f%%   (Amdahl ceiling %.1fx)\n",
+                    p.grid_build / n, p.grid_serial / n, p.p4_agents / n, p.p5_claims / n,
+                    p.p6_deaths / n, p.p7_compact / n, p.p8_food / n, p.total / n,
+                    100.0 * p.serial_fraction(), p.amdahl_ceiling());
+    }
     return r;
 }
 
@@ -223,69 +272,19 @@ int main(int argc, char** argv) {
               << " neighbours=" << (opt.naive ? "naive" : "grid") << "\n";
     if (!opt.bench) std::cout << cfg.to_string();
 
-    World world(cfg, opt.seed);
-    world.set_naive(opt.naive);
-
     TelemetryWriter csv;
     if (!opt.out_path.empty() && !csv.open(opt.out_path)) {
         std::cerr << "evosim: cannot write " << opt.out_path << "\n";
         return 2;
     }
 
-    constexpr uint64_t kTelemetryEvery = 100;
-    uint64_t births_acc = 0, deaths_acc = 0;
+    const RunResult r = run_headless(cfg, opt, threads, &csv, true, opt.dump_agents_path);
 
-    const auto t0 = std::chrono::steady_clock::now();
-    auto block_start = t0;
-
-    for (uint64_t i = 0; i < opt.ticks; ++i) {
-        world.step(DT);   // headless: no clock, no variable dt
-        births_acc += world.stats().births;
-        deaths_acc += world.stats().deaths;
-
-        if (world.tick() % kTelemetryEvery == 0) {
-            const auto now = std::chrono::steady_clock::now();
-            const double block_ms =
-                std::chrono::duration<double, std::milli>(now - block_start).count();
-            block_start = now;
-
-            const TraitStats ts = world.trait_stats();
-            TelemetryRow row;
-            row.tick        = world.tick();
-            row.population  = world.population();
-            row.food_active = world.stats().food_active;
-            row.mean_speed  = ts.mean_speed;  row.std_speed = ts.std_speed;
-            row.mean_size   = ts.mean_size;   row.std_size  = ts.std_size;
-            row.mean_sense  = ts.mean_sense;  row.std_sense = ts.std_sense;
-            row.births      = births_acc;
-            row.deaths      = deaths_acc;
-            row.mean_energy = ts.mean_energy;
-            row.ms_per_tick = block_ms / static_cast<double>(kTelemetryEvery);
-            row.state_hash  = world.state_hash();
-            csv.add(row);
-            births_acc = deaths_acc = 0;
-
-            if (opt.verify && world.tick() % 1000 == 0)
-                std::cout << "tick " << world.tick()
-                          << "  pop " << row.population
-                          << "  food " << row.food_active
-                          << "  speed " << row.mean_speed
-                          << "  size " << row.mean_size
-                          << "  sense " << row.mean_sense
-                          << "  E " << row.mean_energy
-                          << "  " << row.ms_per_tick << " ms/tick"
-                          << "  hash " << std::hex << row.state_hash << std::dec << "\n";
-        }
-    }
-    csv.flush();
-    const double secs = std::chrono::duration<double>(std::chrono::steady_clock::now() - t0).count();
-
-    std::cout << "evosim: final state hash " << std::hex << world.state_hash() << std::dec << "\n";
-    std::cout << "evosim: " << world.tick() << " ticks in " << secs << " s  ("
-              << (secs * 1000.0 / static_cast<double>(opt.ticks ? opt.ticks : 1))
-              << " ms/tick)\n"
-              << "        final population " << world.population()
-              << ", food active " << world.stats().food_active << "\n";
+    std::cout << "evosim: final state hash " << std::hex << r.hash << std::dec << "\n"
+              << "        " << opt.ticks << " ticks at " << r.ms_tick << " ms/tick\n"
+              << "        final population " << r.population << "\n";
     if (!opt.out_path.empty()) std::cout << "        telemetry -> " << opt.out_path << "\n";
+    if (r.agents_written) std::cout << "        agents    -> " << opt.dump_agents_path << "\n";
+
     return 0;
 }

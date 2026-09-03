@@ -58,6 +58,9 @@ target_link_libraries(evosim PRIVATE evosim_core evosim_warnings)
 add_executable(bench_neighbors bench/bench_neighbors.cpp)
 target_link_libraries(bench_neighbors PRIVATE evosim_core evosim_warnings)
 
+add_executable(bench_scaling bench/bench_scaling.cpp)
+target_link_libraries(bench_scaling PRIVATE evosim_core evosim_warnings)
+
 # ---------------------------------------------------------------------------
 # Tests
 # ---------------------------------------------------------------------------

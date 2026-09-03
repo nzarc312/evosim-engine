@@ -1,6 +1,7 @@
 #include "evosim/world.hpp"
 
 #include <algorithm>
+#include <chrono>
 #include <cmath>
 
 #include "evosim/genome.hpp"
@@ -251,12 +252,31 @@ void World::step(double dt) {
     stats_.deaths = 0;
     stats_.eaten  = 0;
 
-    if (!naive_) p1_p3_build_grid();
-    p4_agents(dt);
-    p5_resolve_claims();
-    p6_mark_deaths();
-    p7_compact_and_reproduce();
-    p8_respawn_food();
+    if (!profiling_) {
+        if (!naive_) p1_p3_build_grid();
+        p4_agents(dt);
+        p5_resolve_claims();
+        p6_mark_deaths();
+        p7_compact_and_reproduce();
+        p8_respawn_food();
+    } else {
+        using Clock = std::chrono::steady_clock;
+        auto mark = [](Clock::time_point& prev, double& sink) {
+            const auto now = Clock::now();
+            sink += std::chrono::duration<double, std::milli>(now - prev).count();
+            prev = now;
+        };
+        auto t = Clock::now();
+        const auto t_begin = t;
+        if (!naive_) { p1_p3_build_grid(); phases_.grid_serial += grid_.last_serial_ms(); }
+        mark(t, phases_.grid_build);
+        p4_agents(dt);              mark(t, phases_.p4_agents);
+        p5_resolve_claims();        mark(t, phases_.p5_claims);
+        p6_mark_deaths();           mark(t, phases_.p6_deaths);
+        p7_compact_and_reproduce(); mark(t, phases_.p7_compact);
+        p8_respawn_food();          mark(t, phases_.p8_food);
+        phases_.total += std::chrono::duration<double, std::milli>(t - t_begin).count();
+    }
 
     std::swap(front_, back_);
     ++tick_;

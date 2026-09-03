@@ -11,21 +11,39 @@
 //      to different last bits, which would break the cross-thread-count
 //      guarantee even though each individual run is reproducible.
 //
-// Padded<T> is 64-byte aligned so adjacent slots never share a cache line.
-// Without it, cores writing neighbouring accumulators invalidate each other's
-// copy on every store -- see bench_scaling --mode false_sharing, which uses the
-// Unpadded variant below purely so the two can be compared.
+// Padded<T> is cache-line aligned so adjacent slots never share a line. Without
+// it, cores writing neighbouring accumulators invalidate each other's copy on
+// every store -- see bench_scaling --mode false_sharing.
+//
+// The alignment is NOT hardcoded to 64. This machine (Apple Silicon) has a
+// 128-byte cache line, so alignas(64) leaves two slots sharing one coherence
+// granule and buys exactly nothing -- measured at 1.00x, which is how the
+// discrepancy was found. 64 is the x86 number, not a universal one.
 #pragma once
 
 #include <cstddef>
+#include <new>
 #include <vector>
 
 #include "evosim/thread_pool.hpp"
 
 namespace evosim {
 
+#if defined(__cpp_lib_hardware_interference_size)
+inline constexpr size_t kCacheLine = std::hardware_destructive_interference_size;
+#else
+inline constexpr size_t kCacheLine = 128;   // Apple Silicon and POWER; x86 is 64
+#endif
+
 template <typename T>
-struct alignas(64) Padded {
+struct alignas(kCacheLine) Padded {
+    T value{};
+};
+
+// Textbook 64-byte padding, kept so the benchmark can show it is not enough on
+// a 128-byte-line machine.
+template <typename T>
+struct alignas(64) Padded64 {
     T value{};
 };
 

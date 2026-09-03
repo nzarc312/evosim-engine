@@ -8,6 +8,7 @@
 #include <vector>
 
 #include "evosim/rng.hpp"
+#include "evosim/thread_pool.hpp"
 #include "evosim/world.hpp"
 #include "test_util.hpp"
 
@@ -161,6 +162,39 @@ int main() {
         size_t expect_active = 0;
         for (const uint8_t a : p.active) expect_active += a;
         CHECK_EQ(g.indexed(), expect_active);
+    }
+
+    // The parallel scatter and the serial scatter must produce the same grid.
+    // This needs a deliberately dense point set, because the build only takes
+    // the parallel path when there are enough points per cell to pay for the
+    // per-chunk histogram -- so without this case the parallel path would never
+    // be exercised by the test suite at all.
+    {
+        const double w = 200.0, h = 200.0, cell = 20.0;   // 100 cells
+        const PointSet p = make_points(200000, w, h, 8080, 0.1);   // ~2000 per cell
+        SpatialGrid serial, parallel;
+        ThreadPool pool(8);
+        serial.build(p.x.data(), p.y.data(), p.active.data(), 200000, w, h, cell, nullptr);
+        parallel.build(p.x.data(), p.y.data(), p.active.data(), 200000, w, h, cell, &pool);
+        CHECK_MSG(parallel.last_build_parallel(), "dense build did not take the parallel path");
+        CHECK_EQ(serial.indexed(), parallel.indexed());
+
+        // Candidate lists must match element for element, in the same order:
+        // the ordering within a cell is the property the parallel build has to
+        // preserve, so comparing sorted sets would not test it.
+        std::vector<uint32_t> a, b;
+        for (size_t q = 0; q < 200; ++q) {
+            const double qx = rng::range(4, q, 0, rng::Purpose::TieBreak, 0, 0.0, w);
+            const double qy = rng::range(4, q, 0, rng::Purpose::TieBreak, 1, 0.0, h);
+            serial.query(qx, qy, 15.0, a);
+            parallel.query(qx, qy, 15.0, b);
+            CHECK_MSG(a == b, "parallel grid build differs from serial at query " +
+                              std::to_string(q));
+        }
+        // And the serial path must still be chosen when the grid is sparse.
+        SpatialGrid sparse;
+        sparse.build(p.x.data(), p.y.data(), p.active.data(), 2000, 5000.0, 5000.0, 15.0, &pool);
+        CHECK_MSG(!sparse.last_build_parallel(), "sparse build should not pay for the histogram");
     }
 
     // World level: the grid path and the naive path must agree tick for tick.

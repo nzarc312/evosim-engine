@@ -38,6 +38,12 @@ public:
     uint32_t nx() const { return nx_; }
     uint32_t ny() const { return ny_; }
     size_t   indexed() const { return sorted_.size(); }
+    // Milliseconds spent in the serial part of the last build (the P2 prefix
+    // sum). Reported separately because it is one of the terms in the measured
+    // serial fraction.
+    double   last_serial_ms() const { return last_serial_ms_; }
+    bool     last_build_parallel() const { return last_build_parallel_; }
+
     double   cell_w() const { return cell_w_; }
     double   cell_h() const { return cell_h_; }
 
@@ -53,6 +59,9 @@ private:
     std::vector<uint32_t> sorted_;       // [n_active]   point indices, cell-major
     std::vector<uint32_t> counts_;       // scratch, reused across ticks
     std::vector<uint32_t> chunk_counts_; // scratch for the parallel build
+
+    double   last_serial_ms_ = 0.0;
+    bool     last_build_parallel_ = false;
 
     uint32_t nx_ = 1, ny_ = 1;
     double   world_w_ = 1.0, world_h_ = 1.0;

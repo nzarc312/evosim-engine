@@ -51,10 +51,9 @@ struct Claim {
     uint32_t agent_idx;
 };
 
-// Per-chunk telemetry accumulators. 64-byte aligned so two chunks never share
-// a cache line -- bench_scaling --mode false_sharing measures what that is
-// worth.
-struct alignas(64) TraitPartials {
+// Per-chunk telemetry accumulators, aligned to the real cache line so two
+// chunks never share one -- see kCacheLine in reduction.hpp.
+struct alignas(kCacheLine) TraitPartials {
     double speed = 0.0, speed_sq = 0.0;
     double size  = 0.0, size_sq  = 0.0;
     double sense = 0.0, sense_sq = 0.0;
@@ -69,6 +68,28 @@ struct TraitStats {
     double mean_size  = 0.0, std_size  = 0.0;
     double mean_sense = 0.0, std_sense = 0.0;
     double mean_energy = 0.0;
+};
+
+// Wall-clock spent in each phase, accumulated across ticks. Off by default:
+// the timing calls are cheap but a benchmark should not pay for them unless it
+// is the thing being measured.
+struct PhaseTimes {
+    double grid_build  = 0.0;   // P1-P3 (P1 and P3 parallel, P2 serial)
+    double grid_serial = 0.0;   // the P2 prefix sum inside the above
+    double p4_agents   = 0.0;   // parallel
+    double p5_claims   = 0.0;   // SERIAL
+    double p6_deaths   = 0.0;   // parallel
+    double p7_compact  = 0.0;   // SERIAL
+    double p8_food     = 0.0;   // SERIAL
+    double total       = 0.0;
+
+    double serial() const { return grid_serial + p5_claims + p7_compact + p8_food; }
+    double serial_fraction() const { return total > 0.0 ? serial() / total : 0.0; }
+    // Amdahl: the most any thread count can ever buy you.
+    double amdahl_ceiling() const {
+        const double s = serial_fraction();
+        return s > 0.0 ? 1.0 / s : 0.0;
+    }
 };
 
 struct TickStats {
@@ -106,6 +127,10 @@ public:
     const AgentBuffer& agents() const { return front_; }
     const FoodBuffer&  food() const { return food_; }
     const TickStats&   stats() const { return stats_; }
+
+    void               set_profiling(bool on) { profiling_ = on; }
+    const PhaseTimes&  phase_times() const { return phases_; }
+    void               reset_phase_times() { phases_ = PhaseTimes{}; }
     size_t             population() const { return front_.count(); }
     double             mean_energy() const;
     TraitStats         trait_stats() const;
@@ -173,7 +198,9 @@ private:
     mutable std::vector<TraitPartials>  trait_slots_;
     mutable TraitStats                  trait_cache_;
 
-    TickStats stats_;
+    TickStats  stats_;
+    PhaseTimes phases_;
+    bool       profiling_ = false;
 };
 
 }  // namespace evosim
