@@ -78,6 +78,7 @@ void FoodBuffer::resize(size_t n) {
 
 World::World(const Config& cfg, uint64_t seed) : cfg_(cfg), seed_(seed) {
     chunk_claims_.resize(1);
+    chunk_candidates_.resize(1);
     seed_population();
     seed_food();
 }
@@ -195,6 +196,7 @@ void World::step(double dt) {
     stats_.deaths = 0;
     stats_.eaten  = 0;
 
+    if (!naive_) p1_p3_build_grid();
     p4_agents(dt);
     p5_resolve_claims();
     p6_mark_deaths();
@@ -205,6 +207,46 @@ void World::step(double dt) {
     ++tick_;
 
     stats_.population = front_.count();
+}
+
+double World::max_query_radius() const {
+    // max() is associative and commutative and exact in floating point, so this
+    // reduction is order-independent -- it needs no fixed-order treatment.
+    double r = 1.0;   // floor: a degenerate population must not make cells tiny
+    const size_t n = front_.count();
+    for (size_t i = 0; i < n; ++i)
+        r = std::max(r, std::max(front_.gene_sense[i], kEatRadiusCoef * front_.gene_size[i]));
+    return r;
+}
+
+// P1-P3: rebuild the food grid. Cell size tracks the evolving population.
+void World::p1_p3_build_grid() {
+    grid_.build(food_.pos_x.data(), food_.pos_y.data(), food_.active.data(), food_.count(),
+                cfg_.world.width, cfg_.world.height, max_query_radius(), nullptr);
+}
+
+int32_t World::nearest_food_grid(double x, double y, double radius,
+                                 std::vector<uint32_t>& scratch) const {
+    grid_.query(x, y, radius, scratch);
+    const double r2 = radius * radius;
+    double  best   = r2;
+    int32_t best_i = -1;
+    for (const uint32_t f : scratch) {
+        if (!food_.active[f]) continue;
+        const double dx = wrap_delta(food_.pos_x[f] - x, cfg_.world.width);
+        const double dy = wrap_delta(food_.pos_y[f] - y, cfg_.world.height);
+        const double d2 = dx * dx + dy * dy;
+        // The grid hands back candidates in ascending index order within each
+        // cell, but cells are visited in block order, so index order across the
+        // whole candidate list is NOT guaranteed. Strict '<' alone would then
+        // pick a different winner than the naive scan on an exact tie, so ties
+        // are broken explicitly on the index.
+        if (d2 < best || (d2 == best && best_i >= 0 && static_cast<int32_t>(f) < best_i)) {
+            best = d2;
+            best_i = static_cast<int32_t>(f);
+        }
+    }
+    return best_i;
 }
 
 // P4: sense -> steer -> integrate -> energy drain -> age.
@@ -239,7 +281,9 @@ void World::p4_agents(double dt) {
         // the post-move distance is inside the (usually much smaller) eating
         // radius. An agent can only eat what it could sense.
         const double eat_r = kEatRadiusCoef * size;
-        const int32_t target = nearest_food_naive(x, y, std::max(sense, eat_r));
+        const double query_r = std::max(sense, eat_r);
+        const int32_t target = naive_ ? nearest_food_naive(x, y, query_r)
+                                      : nearest_food_grid(x, y, query_r, chunk_candidates_[0]);
 
         bool steer_to_target = false;
         if (target >= 0) {

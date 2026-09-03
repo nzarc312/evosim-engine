@@ -4,6 +4,7 @@
 #include <vector>
 
 #include "evosim/config.hpp"
+#include "evosim/spatial_grid.hpp"
 
 namespace evosim {
 
@@ -84,12 +85,19 @@ public:
     // M4 introduces the counting-sort grid; the naive O(n^2) scan stays
     // permanently as the benchmark baseline and the correctness oracle.
     void set_naive(bool naive) { naive_ = naive; }
+    const SpatialGrid& grid() const { return grid_; }
     bool naive() const { return naive_; }
 
 private:
     void seed_population();
     void seed_food();
 
+    // Largest query radius in the current population. This is the grid's cell
+    // size, so it has to be recomputed every tick: sense_radius is a heritable
+    // trait and it evolves.
+    double max_query_radius() const;
+
+    void p1_p3_build_grid();
     void p4_agents(double dt);
     void p5_resolve_claims();
     void p6_mark_deaths();
@@ -103,11 +111,15 @@ private:
     // Nearest active food to (x,y) within `radius`, or -1. Ties break to the
     // lower food index so the result cannot depend on scan order.
     int32_t nearest_food_naive(double x, double y, double radius) const;
+    // Same answer, via the grid. Kept next to the naive version on purpose:
+    // test_spatial_grid asserts they agree exactly.
+    int32_t nearest_food_grid(double x, double y, double radius,
+                              std::vector<uint32_t>& scratch) const;
 
     Config   cfg_;
     uint64_t seed_ = 0;
     uint64_t tick_ = 0;
-    bool     naive_ = true;
+    bool     naive_ = false;
 
     AgentBuffer front_, back_;   // read front_, write back_, swap at tick end
     FoodBuffer  food_;
@@ -116,6 +128,10 @@ private:
     // Per-chunk claim buffers. One chunk while the step is serial; P4 becomes
     // parallel in M6 and the chunk count becomes fixed at kNumChunks.
     std::vector<std::vector<Claim>> chunk_claims_;
+    // Reusable per-chunk neighbour-candidate buffers. Allocating one of these
+    // per agent per tick would cost more than the query it serves.
+    std::vector<std::vector<uint32_t>> chunk_candidates_;
+    SpatialGrid                        grid_;
     std::vector<Claim>              all_claims_;
     std::vector<uint8_t>            eaten_;   // per-agent: got food this tick
 

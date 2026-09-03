@@ -43,12 +43,19 @@ add_library(evosim_core
   src/config.cpp
   src/world.cpp
   src/telemetry.cpp
+  src/spatial_grid.cpp
 )
 target_include_directories(evosim_core PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include)
 target_link_libraries(evosim_core PUBLIC Threads::Threads evosim_fp PRIVATE evosim_warnings)
 
 add_executable(evosim src/main.cpp)
 target_link_libraries(evosim PRIVATE evosim_core evosim_warnings)
+
+# ---------------------------------------------------------------------------
+# Benchmarks
+# ---------------------------------------------------------------------------
+add_executable(bench_neighbors bench/bench_neighbors.cpp)
+target_link_libraries(bench_neighbors PRIVATE evosim_core evosim_warnings)
 
 # ---------------------------------------------------------------------------
 # Tests
@@ -58,6 +65,7 @@ enable_testing()
 set(EVOSIM_TESTS
   test_rng
   test_config
+  test_spatial_grid
 )
 
 foreach(t IN LISTS EVOSIM_TESTS)
