@@ -1,10 +1,13 @@
 #pragma once
 
 #include <cstdint>
+#include <memory>
 #include <vector>
 
 #include "evosim/config.hpp"
+#include "evosim/reduction.hpp"
 #include "evosim/spatial_grid.hpp"
+#include "evosim/thread_pool.hpp"
 
 namespace evosim {
 
@@ -48,6 +51,16 @@ struct Claim {
     uint32_t agent_idx;
 };
 
+// Per-chunk telemetry accumulators. 64-byte aligned so two chunks never share
+// a cache line -- bench_scaling --mode false_sharing measures what that is
+// worth.
+struct alignas(64) TraitPartials {
+    double speed = 0.0, speed_sq = 0.0;
+    double size  = 0.0, size_sq  = 0.0;
+    double sense = 0.0, sense_sq = 0.0;
+    double energy = 0.0;
+};
+
 // Population aggregates. Computed with sums and sums-of-squares in one pass:
 // the two-pass form is numerically nicer but needs a second traversal, and this
 // shape is what P9 turns into a fixed-order parallel reduction in M6.
@@ -68,7 +81,11 @@ struct TickStats {
 
 class World {
 public:
-    World(const Config& cfg, uint64_t seed);
+    // `pool` may be null, in which case the world runs on an internal pool of
+    // one. There is no separate serial code path: a one-thread pool spawns no
+    // threads and dispatches nothing, so single-threaded runs execute the same
+    // phases with the same chunk decomposition as a sixteen-thread run.
+    World(const Config& cfg, uint64_t seed, ThreadPool* pool = nullptr);
 
     void step(double dt);
 
@@ -112,6 +129,7 @@ private:
     void p4_agents(double dt);
     void p5_resolve_claims();
     void p6_mark_deaths();
+    void p9_telemetry() const;
     void p7_compact_and_reproduce();
     void p8_respawn_food();
 
@@ -136,8 +154,11 @@ private:
     FoodBuffer  food_;
     uint64_t    next_agent_id_ = 0;
 
-    // Per-chunk claim buffers. One chunk while the step is serial; P4 becomes
-    // parallel in M6 and the chunk count becomes fixed at kNumChunks.
+    ThreadPool*                 pool_ = nullptr;
+    std::unique_ptr<ThreadPool>  owned_pool_;
+
+    // Per-chunk buffers, one slot per fixed chunk. Nothing here is indexed by
+    // thread id: that is the whole trick behind thread-count invariance.
     std::vector<std::vector<Claim>> chunk_claims_;
     // Reusable per-chunk neighbour-candidate buffers. Allocating one of these
     // per agent per tick would cost more than the query it serves.
@@ -145,6 +166,12 @@ private:
     SpatialGrid                        grid_;
     std::vector<Claim>              all_claims_;
     std::vector<uint8_t>            eaten_;   // per-agent: got food this tick
+
+    // Reduction scratch, reused every tick: a per-tick allocation here would
+    // cost more than the reduction it serves.
+    mutable std::vector<Padded<double>> max_slots_;
+    mutable std::vector<TraitPartials>  trait_slots_;
+    mutable TraitStats                  trait_cache_;
 
     TickStats stats_;
 };

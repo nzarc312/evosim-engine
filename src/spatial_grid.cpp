@@ -3,6 +3,8 @@
 #include <algorithm>
 #include <cmath>
 
+#include "evosim/thread_pool.hpp"
+
 namespace evosim {
 
 uint32_t SpatialGrid::cell_index(double x, double y) const {
@@ -20,8 +22,6 @@ uint32_t SpatialGrid::cell_index(double x, double y) const {
 
 void SpatialGrid::build(const double* xs, const double* ys, const uint8_t* active, size_t n,
                         double world_w, double world_h, double cell_size, ThreadPool* pool) {
-    (void)pool;   // M6 makes P1 and P3 parallel; the result is unchanged.
-
     world_w_ = world_w;
     world_h_ = world_h;
 
@@ -38,35 +38,97 @@ void SpatialGrid::build(const double* xs, const double* ys, const uint8_t* activ
     inv_cell_h_ = 1.0 / cell_h_;
 
     const size_t n_cells = cells();
+    constexpr uint32_t kInactive = 0xFFFFFFFFu;
 
-    // P1: cell index per point. Pure function of position -- parallel-safe.
+    // P1 (parallel): cell index per point. A pure function of position, written
+    // to the point's own slot, so it parallelises with nothing to coordinate.
     cell_of_.resize(n);
-    for (size_t i = 0; i < n; ++i)
-        cell_of_[i] = (active && !active[i]) ? 0xFFFFFFFFu : cell_index(xs[i], ys[i]);
-
-    // P2 (serial): histogram, then prefix sum into bucket offsets.
-    counts_.assign(n_cells + 1, 0u);
-    size_t n_active = 0;
-    for (size_t i = 0; i < n; ++i) {
-        if (cell_of_[i] == 0xFFFFFFFFu) continue;
-        ++counts_[cell_of_[i] + 1];
-        ++n_active;
+    if (pool != nullptr) {
+        pool->run([&](unsigned, size_t b, size_t e) {
+            for (size_t i = b; i < e; ++i)
+                cell_of_[i] = (active && !active[i]) ? kInactive : cell_index(xs[i], ys[i]);
+        }, n);
+    } else {
+        for (size_t i = 0; i < n; ++i)
+            cell_of_[i] = (active && !active[i]) ? kInactive : cell_index(xs[i], ys[i]);
     }
+
+    // The parallel scatter needs a per-chunk histogram, which costs
+    // chunks * n_cells time and memory. That is only a win when cells are dense
+    // relative to the point set; on a sparse grid the histogram dwarfs the
+    // scatter it is meant to accelerate, so the serial path is taken instead.
+    // Both paths produce byte-identical output, so this choice never affects a
+    // state hash -- only the time it takes to get there.
+    const bool parallel_scatter =
+        pool != nullptr && pool->size() > 1 &&
+        static_cast<uint64_t>(n_cells) * ThreadPool::chunks() <= 8ull * n + (1ull << 16);
+
     cell_starts_.resize(n_cells + 1);
-    cell_starts_[0] = 0;
-    for (size_t c = 0; c < n_cells; ++c)
-        cell_starts_[c + 1] = cell_starts_[c] + counts_[c + 1];
 
-    // P3: scatter. Walking i in ascending order means each cell's bucket ends
-    // up sorted by point index, which is what makes the grid's contents
-    // independent of how the build was partitioned.
-    sorted_.resize(n_active);
-    counts_.assign(cell_starts_.begin(), cell_starts_.end());   // cursors
-    for (size_t i = 0; i < n; ++i) {
-        const uint32_t c = cell_of_[i];
-        if (c == 0xFFFFFFFFu) continue;
-        sorted_[counts_[c]++] = static_cast<uint32_t>(i);
+    if (!parallel_scatter) {
+        // P2 (serial): histogram, then prefix sum into bucket offsets.
+        counts_.assign(n_cells + 1, 0u);
+        size_t n_active = 0;
+        for (size_t i = 0; i < n; ++i) {
+            if (cell_of_[i] == kInactive) continue;
+            ++counts_[cell_of_[i] + 1];
+            ++n_active;
+        }
+        cell_starts_[0] = 0;
+        for (size_t c = 0; c < n_cells; ++c)
+            cell_starts_[c + 1] = cell_starts_[c] + counts_[c + 1];
+
+        // P3: scatter. Walking i in ascending order means each cell's bucket
+        // ends up sorted by point index, which is what makes the grid's
+        // contents independent of how the build was partitioned.
+        sorted_.resize(n_active);
+        counts_.assign(cell_starts_.begin(), cell_starts_.end());   // cursors
+        for (size_t i = 0; i < n; ++i) {
+            const uint32_t c = cell_of_[i];
+            if (c == kInactive) continue;
+            sorted_[counts_[c]++] = static_cast<uint32_t>(i);
+        }
+        return;
     }
+
+    // P2a (parallel): each chunk histograms only its own slice of the points,
+    // into its own row. No sharing, so no atomics and no contention.
+    const unsigned C = ThreadPool::chunks();
+    chunk_counts_.assign(static_cast<size_t>(C) * n_cells, 0u);
+    pool->run([&](unsigned chunk, size_t b, size_t e) {
+        uint32_t* row = chunk_counts_.data() + static_cast<size_t>(chunk) * n_cells;
+        for (size_t i = b; i < e; ++i) {
+            const uint32_t c = cell_of_[i];
+            if (c != kInactive) ++row[c];
+        }
+    }, n);
+
+    // P2b (serial): for each cell, lay the chunks out in chunk order and turn
+    // each chunk's count into its write cursor. Chunks are contiguous ascending
+    // index ranges, so cursors assigned in chunk order give each cell a bucket
+    // sorted by point index -- exactly what the serial scatter produces.
+    uint32_t running = 0;
+    for (size_t k = 0; k < n_cells; ++k) {
+        cell_starts_[k] = running;
+        for (unsigned c = 0; c < C; ++c) {
+            uint32_t& slot = chunk_counts_[static_cast<size_t>(c) * n_cells + k];
+            const uint32_t cnt = slot;
+            slot = running;
+            running += cnt;
+        }
+    }
+    cell_starts_[n_cells] = running;
+
+    // P3 (parallel): every chunk writes only into the ranges its own cursors
+    // point at, which no other chunk can touch.
+    sorted_.resize(running);
+    pool->run([&](unsigned chunk, size_t b, size_t e) {
+        uint32_t* row = chunk_counts_.data() + static_cast<size_t>(chunk) * n_cells;
+        for (size_t i = b; i < e; ++i) {
+            const uint32_t c = cell_of_[i];
+            if (c != kInactive) sorted_[row[c]++] = static_cast<uint32_t>(i);
+        }
+    }, n);
 }
 
 void SpatialGrid::query(double x, double y, double r, std::vector<uint32_t>& out) const {

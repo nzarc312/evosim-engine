@@ -44,6 +44,7 @@ add_library(evosim_core
   src/world.cpp
   src/telemetry.cpp
   src/spatial_grid.cpp
+  src/thread_pool.cpp
 )
 target_include_directories(evosim_core PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include)
 target_link_libraries(evosim_core PUBLIC Threads::Threads evosim_fp PRIVATE evosim_warnings)
@@ -66,8 +67,10 @@ set(EVOSIM_TESTS
   test_rng
   test_config
   test_math
+  test_reduction
   test_spatial_grid
   test_determinism
+  test_thread_invariance
 )
 
 foreach(t IN LISTS EVOSIM_TESTS)
@@ -76,6 +79,8 @@ foreach(t IN LISTS EVOSIM_TESTS)
   add_test(NAME ${t} COMMAND ${t})
 endforeach()
 
-set_tests_properties(test_determinism PROPERTIES TIMEOUT 900)
+# Both determinism tests run thousands of ticks at several thread counts;
+# give them room on a loaded box.
+set_tests_properties(test_determinism test_thread_invariance PROPERTIES TIMEOUT 900)
 
 message(STATUS "evosim: build type ${CMAKE_BUILD_TYPE}, C++${CMAKE_CXX_STANDARD}")

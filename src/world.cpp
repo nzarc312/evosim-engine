@@ -78,9 +78,14 @@ void FoodBuffer::resize(size_t n) {
 // Construction
 // ---------------------------------------------------------------------------
 
-World::World(const Config& cfg, uint64_t seed) : cfg_(cfg), seed_(seed) {
-    chunk_claims_.resize(1);
-    chunk_candidates_.resize(1);
+World::World(const Config& cfg, uint64_t seed, ThreadPool* pool) : cfg_(cfg), seed_(seed) {
+    if (pool == nullptr) {
+        owned_pool_ = std::make_unique<ThreadPool>(1);
+        pool = owned_pool_.get();
+    }
+    pool_ = pool;
+    chunk_claims_.resize(ThreadPool::chunks());
+    chunk_candidates_.resize(ThreadPool::chunks());
     seed_population();
     seed_food();
 }
@@ -159,20 +164,35 @@ double World::mean_energy() const {
     return s / static_cast<double>(front_.count());
 }
 
+// P9: seven sums in one parallel pass, combined serially in chunk order. Seven
+// separate reductions would mean seven dispatches over the same arrays.
 TraitStats World::trait_stats() const {
     TraitStats t;
     const size_t n = front_.count();
     if (n == 0) return t;
 
+    trait_slots_.assign(ThreadPool::chunks(), TraitPartials{});
+    pool_->run([this](unsigned chunk, size_t begin, size_t end) {
+        TraitPartials p;
+        for (size_t i = begin; i < end; ++i) {
+            const double a = front_.gene_speed[i];
+            const double b = front_.gene_size[i];
+            const double c = front_.gene_sense[i];
+            p.speed += a; p.speed_sq += a * a;
+            p.size  += b; p.size_sq  += b * b;
+            p.sense += c; p.sense_sq += c * c;
+            p.energy += front_.energy[i];
+        }
+        trait_slots_[chunk] = p;
+    }, n);
+
     double s1 = 0.0, s2 = 0.0, z1 = 0.0, z2 = 0.0, e1 = 0.0, e2 = 0.0, en = 0.0;
-    for (size_t i = 0; i < n; ++i) {
-        const double a = front_.gene_speed[i];
-        const double b = front_.gene_size[i];
-        const double c = front_.gene_sense[i];
-        s1 += a; s2 += a * a;
-        z1 += b; z2 += b * b;
-        e1 += c; e2 += c * c;
-        en += front_.energy[i];
+    for (unsigned c = 0; c < ThreadPool::chunks(); ++c) {   // fixed order
+        const TraitPartials& p = trait_slots_[c];
+        s1 += p.speed; s2 += p.speed_sq;
+        z1 += p.size;  z2 += p.size_sq;
+        e1 += p.sense; e2 += p.sense_sq;
+        en += p.energy;
     }
     const double inv = 1.0 / static_cast<double>(n);
     auto sd = [](double sum, double sumsq, double invn) {
@@ -245,19 +265,19 @@ void World::step(double dt) {
 }
 
 double World::max_query_radius() const {
-    // max() is associative and commutative and exact in floating point, so this
-    // reduction is order-independent -- it needs no fixed-order treatment.
-    double r = 1.0;   // floor: a degenerate population must not make cells tiny
-    const size_t n = front_.count();
-    for (size_t i = 0; i < n; ++i)
-        r = std::max(r, std::max(front_.gene_sense[i], kEatRadiusCoef * front_.gene_size[i]));
-    return r;
+    // max is associative, commutative and exact in floating point, so this
+    // reduction is order-independent -- it needs no fixed-order treatment, only
+    // per-chunk slots to keep the threads from racing. The 1.0 floor stops a
+    // degenerate population from asking for a grid of microscopic cells.
+    return deterministic_max(*pool_, max_slots_, front_.count(), 1.0, [this](size_t i) {
+        return std::max(front_.gene_sense[i], kEatRadiusCoef * front_.gene_size[i]);
+    });
 }
 
 // P1-P3: rebuild the food grid. Cell size tracks the evolving population.
 void World::p1_p3_build_grid() {
     grid_.build(food_.pos_x.data(), food_.pos_y.data(), food_.active.data(), food_.count(),
-                cfg_.world.width, cfg_.world.height, max_query_radius(), nullptr);
+                cfg_.world.width, cfg_.world.height, max_query_radius(), pool_);
 }
 
 int32_t World::nearest_food_grid(double x, double y, double radius,
@@ -302,7 +322,14 @@ void World::p4_agents(double dt) {
     const double movec  = cfg_.energy.move_coef;
     const double sensec = cfg_.energy.sense_coef;
 
-    for (size_t i = 0; i < n; ++i) {
+    // P4 is the phase that carries the parallel speedup. It reads front_, and
+    // every write lands at the agent's own index in back_ or in this chunk's
+    // own claim buffer -- disjoint, index-stable writes, which is what makes it
+    // safe without a single lock or atomic.
+    pool_->run([&](unsigned chunk, size_t begin, size_t end) {
+    std::vector<uint32_t>& candidates = chunk_candidates_[chunk];
+    std::vector<Claim>&    claims     = chunk_claims_[chunk];
+    for (size_t i = begin; i < end; ++i) {
         const uint64_t id    = front_.id[i];
         const double   speed = front_.gene_speed[i];
         const double   size  = front_.gene_size[i];
@@ -318,7 +345,7 @@ void World::p4_agents(double dt) {
         const double eat_r = kEatRadiusCoef * size;
         const double query_r = std::max(sense, eat_r);
         const int32_t target = naive_ ? nearest_food_naive(x, y, query_r)
-                                      : nearest_food_grid(x, y, query_r, chunk_candidates_[0]);
+                                      : nearest_food_grid(x, y, query_r, candidates);
 
         bool steer_to_target = false;
         if (target >= 0) {
@@ -385,10 +412,10 @@ void World::p4_agents(double dt) {
             const double bx = wrap_delta(food_.pos_x[target] - nx, w);
             const double by = wrap_delta(food_.pos_y[target] - ny, h);
             if (bx * bx + by * by <= eat_r * eat_r)
-                chunk_claims_[0].push_back({static_cast<uint32_t>(target),
-                                            static_cast<uint32_t>(i)});
+                claims.push_back({static_cast<uint32_t>(target), static_cast<uint32_t>(i)});
         }
     }
+    }, n);
 }
 
 // P5 (serial): concatenate the per-chunk claim vectors in chunk order, sort by
@@ -422,8 +449,10 @@ void World::p5_resolve_claims() {
 void World::p6_mark_deaths() {
     const size_t n = back_.count();
     const uint32_t max_age = cfg_.energy.max_age;
-    for (size_t i = 0; i < n; ++i)
-        if (back_.energy[i] <= 0.0 || back_.age[i] > max_age) back_.alive[i] = 0;
+    pool_->run([&](unsigned, size_t begin, size_t end) {
+        for (size_t i = begin; i < end; ++i)
+            if (back_.energy[i] <= 0.0 || back_.age[i] > max_age) back_.alive[i] = 0;
+    }, n);
 }
 
 // P7 (serial): stable compaction, then offspring appended in parent-index
