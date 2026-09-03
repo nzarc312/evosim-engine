@@ -230,6 +230,20 @@ int thread_sweep(const Config& cfg, const Options& opt) {
     }
 
     std::cout << "\n";
+    // A tick this cheap is dominated by barrier dispatch, not by the work, so a
+    // speedup below 1 here is expected rather than a defect. Say so, instead of
+    // letting the demo command look like it disproves its own claim.
+    if (base < 1.0) {
+        std::cout << "note: a tick costs only " << base << " ms at "
+                  << cfg.population.initial_agents << " agents, which is less than the "
+                     "cost of dispatching it.\n"
+                     "      Thread-count invariance is what this command proves; for the "
+                     "speedup curve use a\n"
+                     "      population where there is real work per tick, e.g.\n"
+                     "        evosim --ticks 300 --thread-sweep --set population.initial_agents=200000 \\\n"
+                     "               --set food.target_count=400000 --set world.width=7071 "
+                     "--set world.height=7071\n\n";
+    }
     if (all_match) {
         std::cout << "PASS: every thread count produced state hash "
                   << std::hex << reference << std::dec << "\n";

@@ -17,8 +17,30 @@ The evolution is the demo. The engine is the point.
 
 ```bash
 cmake -B build && cmake --build build
-./build/evosim --seed 42 --ticks 10000 --thread-sweep    # proves the claim above
+ctest --test-dir build            # 7 suites, including the invariance proof
+
+# The demo. One invocation runs 1/2/4/8/16 threads and compares state hashes.
+./build/evosim --seed 42 --ticks 300 --thread-sweep \
+    --set population.initial_agents=200000 --set food.target_count=400000 \
+    --set world.width=7071 --set world.height=7071
 ```
+
+```
+| threads | ms/tick | speedup | efficiency | population | state hash |
+|---:|---:|---:|---:|---:|---|
+| 1 | 39.401 | 1.00x | 100% | 188040 | 9256348aa7c5b45e |
+| 2 | 20.043 | 1.97x |  98% | 188040 | 9256348aa7c5b45e |
+| 4 | 10.662 | 3.70x |  92% | 188040 | 9256348aa7c5b45e |
+| 8 |  7.683 | 5.13x |  64% | 188040 | 9256348aa7c5b45e |
+| 16|  5.131 | 7.68x |  48% | 188040 | 9256348aa7c5b45e |
+
+PASS: every thread count produced state hash 9256348aa7c5b45e
+```
+
+Run it at the default 1,000 agents and the hashes still match, but the speedup
+is *below* 1: a tick there costs ~0.08 ms, which is less than the cost of
+dispatching it across 16 threads. The command says so rather than letting the
+demo look like it disproves its own headline.
 
 ---
 
