@@ -1,0 +1,7 @@
+[world]      width = 500.0 ; height = 500.0
+[population] initial_agents = 1000 ; max_agents = 500000
+[food]       target_count = 2000 ; spawn_rate = 50 ; energy_per_food = 25.0
+[energy]     base_cost = 0.05 ; move_coef = 0.02 ; sense_coef = 0.01
+             repro_threshold = 100.0 ; max_age = 3000
+[mutation]   sigma = 0.05
+[threading]  threads = 0        # 0 = hardware_concurrency
