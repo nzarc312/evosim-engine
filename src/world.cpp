@@ -4,6 +4,8 @@
 #include <cmath>
 
 #include "evosim/genome.hpp"
+#include "evosim/math.hpp"
+#include "evosim/hash.hpp"
 #include "evosim/rng.hpp"
 
 namespace evosim {
@@ -13,7 +15,7 @@ constexpr double kInitialEnergy   = 50.0;
 constexpr double kCapacityBase    = 100.0;  // capacity = kCapacityBase * (1 + size)
 constexpr double kEatRadiusCoef   = 1.0;    // eating radius = coef * size
 constexpr double kMaxTurn         = 0.40;   // radians of wander per tick
-constexpr double kTwoPi           = 6.283185307179586476925286766559;
+constexpr double kTwoPi           = mathd::kTwoPi;
 
 double capacity_of(double size) { return kCapacityBase * (1.0 + size); }
 
@@ -97,8 +99,8 @@ void World::seed_population() {
         front_.gene_sense[i] = genome::seed_trait(genome::kSense, seed_, id, 4);
 
         const double heading = kTwoPi * rng::unit(rng::draw(seed_, id, 0, rng::Purpose::InitAgent, 5));
-        front_.vel_x[i] = std::cos(heading) * front_.gene_speed[i];
-        front_.vel_y[i] = std::sin(heading) * front_.gene_speed[i];
+        front_.vel_x[i] = mathd::dcos(heading) * front_.gene_speed[i];
+        front_.vel_y[i] = mathd::dsin(heading) * front_.gene_speed[i];
         front_.energy[i] = kInitialEnergy;
         front_.age[i]    = 0;
         front_.alive[i]  = 1;
@@ -115,6 +117,39 @@ void World::seed_food() {
         food_.active[i] = 1;
     }
     stats_.food_active = n;
+}
+
+uint64_t World::state_hash() const {
+    uint64_t h = hash::kOffsetBasis;
+    h = hash::u64(h, kStateHashVersion);
+    h = hash::u64(h, tick_);
+    h = hash::u64(h, seed_);
+    h = hash::u64(h, next_agent_id_);
+
+    const size_t n = front_.count();
+    h = hash::u64(h, static_cast<uint64_t>(n));
+    for (size_t i = 0; i < n; ++i) {
+        h = hash::u64(h, front_.id[i]);
+        h = hash::f64(h, front_.pos_x[i]);
+        h = hash::f64(h, front_.pos_y[i]);
+        h = hash::f64(h, front_.vel_x[i]);
+        h = hash::f64(h, front_.vel_y[i]);
+        h = hash::f64(h, front_.energy[i]);
+        h = hash::f64(h, front_.gene_speed[i]);
+        h = hash::f64(h, front_.gene_size[i]);
+        h = hash::f64(h, front_.gene_sense[i]);
+        h = hash::u32(h, front_.age[i]);
+        h = hash::u8 (h, front_.alive[i]);
+    }
+
+    const size_t f = food_.count();
+    h = hash::u64(h, static_cast<uint64_t>(f));
+    for (size_t i = 0; i < f; ++i) {
+        h = hash::f64(h, food_.pos_x[i]);
+        h = hash::f64(h, food_.pos_y[i]);
+        h = hash::u8 (h, food_.active[i]);
+    }
+    return h;
 }
 
 double World::mean_energy() const {
@@ -311,11 +346,11 @@ void World::p4_agents(double dt) {
                 dirx /= len; diry /= len;
             } else {
                 const double a = kTwoPi * rng::unit(rng::draw(seed_, id, tick_, rng::Purpose::Wander, 0));
-                dirx = std::cos(a); diry = std::sin(a);
+                dirx = mathd::dcos(a); diry = mathd::dsin(a);
             }
             const double turn = (rng::unit(rng::draw(seed_, id, tick_, rng::Purpose::Wander, 1)) - 0.5)
                                 * 2.0 * kMaxTurn;
-            const double c = std::cos(turn), s = std::sin(turn);
+            const double c = mathd::dcos(turn), s = mathd::dsin(turn);
             const double nx = dirx * c - diry * s;
             const double ny = dirx * s + diry * c;
             dirx = nx; diry = ny;
@@ -443,7 +478,7 @@ void World::p7_compact_and_reproduce() {
         const double c_sen = genome::mutate(p_sen, genome::kSense, sigma, seed_, cid, tick_, 4);
         const double a = kTwoPi * rng::unit(rng::draw(seed_, cid, tick_, rng::Purpose::Mutation, 6));
 
-        back_.append(cid, px, py, std::cos(a) * c_spd, std::sin(a) * c_spd, half,
+        back_.append(cid, px, py, mathd::dcos(a) * c_spd, mathd::dsin(a) * c_spd, half,
                      c_spd, c_siz, c_sen, 0);
         ++stats_.births;
     }

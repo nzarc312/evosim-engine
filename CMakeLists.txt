@@ -65,7 +65,9 @@ enable_testing()
 set(EVOSIM_TESTS
   test_rng
   test_config
+  test_math
   test_spatial_grid
+  test_determinism
 )
 
 foreach(t IN LISTS EVOSIM_TESTS)
@@ -73,5 +75,7 @@ foreach(t IN LISTS EVOSIM_TESTS)
   target_link_libraries(${t} PRIVATE evosim_core evosim_warnings)
   add_test(NAME ${t} COMMAND ${t})
 endforeach()
+
+set_tests_properties(test_determinism PROPERTIES TIMEOUT 900)
 
 message(STATUS "evosim: build type ${CMAKE_BUILD_TYPE}, C++${CMAKE_CXX_STANDARD}")

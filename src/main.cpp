@@ -129,6 +129,7 @@ int main(int argc, char** argv) {
             row.deaths      = deaths_acc;
             row.mean_energy = ts.mean_energy;
             row.ms_per_tick = block_ms / static_cast<double>(kTelemetryEvery);
+            row.state_hash  = world.state_hash();
             csv.add(row);
             births_acc = deaths_acc = 0;
 
@@ -140,12 +141,14 @@ int main(int argc, char** argv) {
                           << "  size " << row.mean_size
                           << "  sense " << row.mean_sense
                           << "  E " << row.mean_energy
-                          << "  " << row.ms_per_tick << " ms/tick\n";
+                          << "  " << row.ms_per_tick << " ms/tick"
+                          << "  hash " << std::hex << row.state_hash << std::dec << "\n";
         }
     }
     csv.flush();
     const double secs = std::chrono::duration<double>(std::chrono::steady_clock::now() - t0).count();
 
+    std::cout << "evosim: final state hash " << std::hex << world.state_hash() << std::dec << "\n";
     std::cout << "evosim: " << world.tick() << " ticks in " << secs << " s  ("
               << (secs * 1000.0 / static_cast<double>(opt.ticks ? opt.ticks : 1))
               << " ms/tick)\n"

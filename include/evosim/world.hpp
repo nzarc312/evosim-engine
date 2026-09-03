@@ -72,6 +72,17 @@ public:
 
     void step(double dt);
 
+    // FNV-1a over the whole front buffer, the food state and the tick counter.
+    // Every claim this project makes is a comparison of these values: run vs
+    // run, debug vs release, 1 thread vs 16. When a run diverges, binary-search
+    // the first tick whose hash differs.
+    uint64_t state_hash() const;
+
+    // Bumped whenever the phase order or the hashed field set changes, so that
+    // hashes recorded by an older build can never be silently compared against
+    // a newer one.
+    static constexpr uint64_t kStateHashVersion = 1;
+
     uint64_t          tick() const { return tick_; }
     uint64_t          seed() const { return seed_; }
     const Config&     config() const { return cfg_; }
