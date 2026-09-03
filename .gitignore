@@ -5,3 +5,9 @@ __pycache__/
 # README references are committed on purpose.
 /*.csv
 !analysis/plots/
+
+# Generated viewer (6+ MiB); rebuild with analysis/make_viewer.py
+analysis/viewer.html
+# Sampled time series from the sweep: 6.8 MB and fully regenerable with
+# `evosim_sweep`. The 128 KB summary next to it is committed.
+analysis/experiments/sweep_series.csv

@@ -20,12 +20,31 @@ struct Config {
     struct Population {
         uint32_t initial_agents = 1000;
         uint32_t max_agents     = 500000;
+        // Founder greed. Negative means "draw uniformly across the trait range";
+        // a value in [0,1] starts every founder at exactly that greed, which is
+        // how the greedy-vs-prudent comparison is set up.
+        double   initial_greed  = -1.0;
     } population;
 
+    // Food is a renewable resource, not a pickup. Each source holds a stock of
+    // biomass that regrows toward `capacity`; harvesting it below
+    // `collapse_threshold` of capacity kills it permanently. `recolonise_rate`
+    // is the only way a dead source ever comes back, and setting it to zero
+    // makes collapse irreversible.
     struct Food {
-        uint32_t target_count    = 2000;
-        uint32_t spawn_rate      = 50;
-        double   energy_per_food = 25.0;
+        uint32_t target_count       = 2000;   // number of source slots
+        uint32_t spawn_rate         = 50;     // initial fill rate, sources/tick
+        double   capacity           = 25.0;   // max stock per source
+        double   energy_per_unit    = 3.0;    // energy per unit of stock eaten
+        double   regen_rate         = 3.00;   // stock regrown per second
+        double   collapse_threshold = 0.10;   // fraction of capacity; below = dead
+        double   recolonise_rate    = 10.0;   // dead sources revived per second
+        // Ticks an agent must wait between bites. Without this an agent camps
+        // on a source and bites 60 times a second, which drains it to death
+        // whatever its greed -- and then greed has no ecological consequence
+        // at all. A bite has to be a discrete visit for prudence to mean
+        // anything.
+        uint32_t digest_ticks       = 60;
     } food;
 
     // Costs are per simulated second and are applied as `energy -= cost * dt`.

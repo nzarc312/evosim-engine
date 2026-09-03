@@ -19,8 +19,10 @@ constexpr double DT = 1.0 / 60.0;
 struct AgentBuffer {
     std::vector<uint64_t> id;
     std::vector<double>   pos_x, pos_y, vel_x, vel_y, energy;
-    std::vector<double>   gene_speed, gene_size, gene_sense;
+    std::vector<double>   gene_speed, gene_size, gene_sense, gene_greed;
     std::vector<uint32_t> age;
+    std::vector<uint32_t> cooldown;   // ticks left before the next bite
+    std::vector<uint32_t> lineage;   // founder ancestor, inherited unchanged
     std::vector<uint8_t>  alive;
 
     size_t count() const { return pos_x.size(); }
@@ -33,12 +35,22 @@ struct AgentBuffer {
     // Append from scalars. Offspring are appended to the buffer being iterated,
     // so the values must be read out before any push_back can reallocate.
     void   append(uint64_t id_, double x, double y, double vx, double vy, double e,
-                  double speed, double size, double sense, uint32_t age_);
+                  double speed, double size, double sense, double greed,
+                  uint32_t age_, uint32_t lineage_);
 };
 
+// A renewable food source, not a pickup. `stock` regrows toward capacity while
+// the source is alive; harvesting it below the collapse threshold kills it, and
+// only recolonisation brings it back.
+//
+// Invariant worth stating: a living source always holds at least
+// collapse_threshold * capacity, because the collapse check runs immediately
+// after every bite. So `alive` alone is a sufficient harvestable predicate, and
+// the spatial grid can filter on it exactly as it filtered on `active` before.
 struct FoodBuffer {
     std::vector<double>  pos_x, pos_y;
-    std::vector<uint8_t> active;
+    std::vector<double>  stock;
+    std::vector<uint8_t> alive;
 
     size_t count() const { return pos_x.size(); }
     void   resize(size_t n);
@@ -57,6 +69,7 @@ struct alignas(kCacheLine) TraitPartials {
     double speed = 0.0, speed_sq = 0.0;
     double size  = 0.0, size_sq  = 0.0;
     double sense = 0.0, sense_sq = 0.0;
+    double greed = 0.0, greed_sq = 0.0;
     double energy = 0.0;
 };
 
@@ -67,6 +80,7 @@ struct TraitStats {
     double mean_speed = 0.0, std_speed = 0.0;
     double mean_size  = 0.0, std_size  = 0.0;
     double mean_sense = 0.0, std_sense = 0.0;
+    double mean_greed = 0.0, std_greed = 0.0;
     double mean_energy = 0.0;
 };
 
@@ -93,11 +107,15 @@ struct PhaseTimes {
 };
 
 struct TickStats {
-    size_t   population   = 0;
-    size_t   food_active  = 0;
-    uint32_t births       = 0;
-    uint32_t deaths       = 0;
-    uint32_t eaten        = 0;   // food items consumed this tick
+    size_t   population    = 0;
+    size_t   food_active   = 0;   // sources still alive
+    uint32_t births        = 0;
+    uint32_t deaths        = 0;
+    uint32_t eaten         = 0;   // bites taken this tick
+    uint32_t collapsed     = 0;   // sources harvested to death this tick
+    uint32_t recolonised   = 0;   // dead sources brought back this tick
+    double   stock_total   = 0.0; // standing biomass across all live sources
+    double   harvest_total = 0.0; // biomass removed this tick
 };
 
 class World {
@@ -119,7 +137,8 @@ public:
     // Bumped whenever the phase order or the hashed field set changes, so that
     // hashes recorded by an older build can never be silently compared against
     // a newer one.
-    static constexpr uint64_t kStateHashVersion = 1;
+    // v2: added the greed trait, lineage ids, and renewable food stock.
+    static constexpr uint64_t kStateHashVersion = 2;
 
     uint64_t          tick() const { return tick_; }
     uint64_t          seed() const { return seed_; }
@@ -156,7 +175,7 @@ private:
     void p6_mark_deaths();
     void p9_telemetry() const;
     void p7_compact_and_reproduce();
-    void p8_respawn_food();
+    void p8_respawn_food(double dt);
 
     // Toroidal minimum-image delta.
     double wrap_delta(double d, double extent) const;
@@ -178,6 +197,9 @@ private:
     AgentBuffer front_, back_;   // read front_, write back_, swap at tick end
     FoodBuffer  food_;
     uint64_t    next_agent_id_ = 0;
+    // Fractional recolonisation carried between ticks. Hashed, because it is
+    // simulation state that affects when the next source comes back.
+    double      recolonise_accum_ = 0.0;
 
     ThreadPool*                 pool_ = nullptr;
     std::unique_ptr<ThreadPool>  owned_pool_;

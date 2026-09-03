@@ -1,6 +1,19 @@
 [world]      width = 500.0 ; height = 500.0
-[population] initial_agents = 1000 ; max_agents = 500000
-[food]       target_count = 2000 ; spawn_rate = 50 ; energy_per_food = 25.0
+# initial_greed: -1 draws founders uniformly across the greed range; a value in
+# [0,1] starts every founder at exactly that greed. 0.15 sustains this world
+# indefinitely; 0.25 collapses it. See README "Greedy vs prudent".
+[population] initial_agents = 1000 ; max_agents = 500000 ; initial_greed = -1
+# Food sources are renewable. Each holds a stock that regrows toward capacity;
+# harvesting it below collapse_threshold * capacity kills it permanently, and
+# only recolonise_rate ever brings a dead slot back. Set recolonise_rate = 0 for
+# an irreversible commons.
+[food]       target_count = 2000 ; spawn_rate = 50 ; capacity = 25.0
+             energy_per_unit = 3.0 ; regen_rate = 3.00
+             collapse_threshold = 0.10 ; recolonise_rate = 10.0
+             # An agent must wait this many ticks between bites. Without it an
+             # agent camps on a source and bites 60 times a second, draining it
+             # whatever its greed -- and then greed costs nothing.
+             digest_ticks = 60
 # Energy costs are per simulated second: energy -= cost * dt.
 #   cost = base_cost + move_coef * speed^2 * size^3 + sense_coef * sense_radius
 [energy]     base_cost = 1.00 ; move_coef = 0.35 ; sense_coef = 0.15

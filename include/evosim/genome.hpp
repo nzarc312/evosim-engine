@@ -22,6 +22,17 @@ inline constexpr Range kSpeed{0.5, 3.0};   // movement units/sec
 inline constexpr Range kSize {0.5, 2.0};   // energy capacity, eating radius
 inline constexpr Range kSense{1.0, 15.0};  // food detection distance
 
+// Harvest fraction: how much of a food source's full capacity an agent tries to
+// take in one bite. 1.0 strips the source bare, 0.05 nibbles.
+//
+// Unlike the other three traits, greed has NO direct metabolic cost. That is
+// deliberate: its only cost is ecological. Taking too much drops a source below
+// its collapse threshold and kills it permanently, which removes food from the
+// patch the agent -- and, because offspring are born where the parent stood,
+// its own descendants -- are standing in. If greed evolves downward it is
+// because of that feedback and nothing else.
+inline constexpr Range kGreed{0.05, 1.0};
+
 // child = clamp(parent + gaussian * sigma * range)
 inline double mutate(double parent, const Range& r, double sigma, uint64_t seed,
                      uint64_t child_id, uint64_t tick, uint32_t sub) {

@@ -19,8 +19,13 @@ struct TelemetryRow {
     double   mean_speed  = 0.0, std_speed = 0.0;
     double   mean_size   = 0.0, std_size  = 0.0;
     double   mean_sense  = 0.0, std_sense = 0.0;
+    double   mean_greed  = 0.0, std_greed = 0.0;
     uint64_t births      = 0;
     uint64_t deaths      = 0;
+    uint64_t collapsed   = 0;   // sources harvested to death since the last row
+    uint64_t recolonised = 0;
+    double   stock_total = 0.0;
+    double   harvest     = 0.0; // biomass removed since the last row
     double   mean_energy = 0.0;
     double   ms_per_tick = 0.0;
     uint64_t state_hash  = 0;

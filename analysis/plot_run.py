@@ -27,7 +27,8 @@ import matplotlib.pyplot as plt
 
 TRAITS = [("speed", "Speed", "#4c72b0"),
           ("size", "Size", "#dd8452"),
-          ("sense", "Sense radius", "#55a868")]
+          ("sense", "Sense radius", "#55a868"),
+          ("greed", "Greed (harvest fraction)", "#c8392f")]
 
 
 def read_telemetry(path):
@@ -80,11 +81,11 @@ def style(ax, title, xlabel, ylabel):
 def plot_population(t, outdir):
     fig, ax = plt.subplots(figsize=(9, 4.2))
     ax.plot(t["tick"], t["population"], color="#4c72b0", linewidth=1.4, label="population")
-    style(ax, "Population over time", "tick", "agents")
+    style(ax, "Population and the resource it lives on", "tick", "agents")
     ax2 = ax.twinx()
-    ax2.plot(t["tick"], t["food_active"], color="#c44e52", linewidth=1.0,
-             alpha=0.6, label="active food")
-    ax2.set_ylabel("active food")
+    ax2.plot(t["tick"], t["food_active"], color="#3f8a52", linewidth=1.0,
+             alpha=0.75, label="live food sources")
+    ax2.set_ylabel("live food sources")
     ax2.spines["top"].set_visible(False)
     lines = ax.get_lines() + ax2.get_lines()
     ax.legend(lines, [l.get_label() for l in lines], frameon=False, loc="best")
@@ -94,7 +95,7 @@ def plot_population(t, outdir):
 
 
 def plot_traits(t, outdir):
-    fig, axes = plt.subplots(3, 1, figsize=(9, 8), sharex=True)
+    fig, axes = plt.subplots(len(TRAITS), 1, figsize=(9, 2.6 * len(TRAITS)), sharex=True)
     for ax, (key, label, colour) in zip(axes, TRAITS):
         mean = t["mean_" + key]
         sd = t["std_" + key]
@@ -111,7 +112,7 @@ def plot_traits(t, outdir):
 
 def plot_correlation(t, agents, outdir):
     fig, axes = plt.subplots(1, 3, figsize=(12, 4))
-    pairs = [("speed", "size"), ("speed", "sense"), ("size", "sense")]
+    pairs = [("greed", "sense"), ("speed", "size"), ("size", "sense")]
     for ax, (a, b) in zip(axes, pairs):
         if agents:
             ax.scatter(agents[a], agents[b], s=4, alpha=0.18, color="#4c72b0", linewidths=0)

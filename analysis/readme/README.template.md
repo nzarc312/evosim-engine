@@ -32,116 +32,58 @@ in `bench/`; none of them are hand-typed.
 
 ### Threading scale-up — 200,000 agents
 
-| threads | ms/tick | speedup | parallel efficiency | state hash |
-|---:|---:|---:|---:|---|
-| 1 | 39.401 | 1.00x | 100% | `9256348aa7c5b45e` |
-| 2 | 20.043 | 1.97x | 98% | `9256348aa7c5b45e` |
-| 4 | 10.662 | 3.70x | 92% | `9256348aa7c5b45e` |
-| 8 | 7.683 | 5.13x | 64% | `9256348aa7c5b45e` |
-| 16 | 5.131 | 7.68x | 48% | `9256348aa7c5b45e` |
-
-**All thread counts produced the same state hash.**
+{{scaling200}}
 
 ### Threading scale-up — 50,000 agents
 
-| threads | ms/tick | speedup | parallel efficiency | state hash |
-|---:|---:|---:|---:|---|
-| 1 | 8.681 | 1.00x | 100% | `fb244219630a45d7` |
-| 2 | 4.645 | 1.87x | 93% | `fb244219630a45d7` |
-| 4 | 2.715 | 3.20x | 80% | `fb244219630a45d7` |
-| 8 | 1.703 | 5.10x | 64% | `fb244219630a45d7` |
-| 16 | 1.327 | 6.54x | 41% | `fb244219630a45d7` |
-
-**All thread counts produced the same state hash.**
+{{scaling50}}
 
 ### Measured serial fraction
 
 Rather than inferring the serial fraction from the speedup curve, `bench_scaling
 --mode serial` times each phase directly.
 
-| phase | parallel? | ms/tick @1 | ms/tick @16 | share @16 |
-|---|---|---:|---:|---:|
-| P1-P3 grid build (total) | mixed | 1.123 | 0.923 | 17.9% |
-| &nbsp;&nbsp;of which P2 prefix sum | **serial** | 0.302 | 0.311 | 6.0% |
-| P4 agents | parallel | 36.277 | 3.846 | 74.6% |
-| P5 claim resolution | **serial** | 0.024 | 0.030 | 0.6% |
-| P6 mark deaths | parallel | 0.100 | 0.067 | 1.3% |
-| P7 compact + reproduce | **serial** | 0.115 | 0.118 | 2.3% |
-| P8 food respawn | **serial** | 0.169 | 0.169 | 3.3% |
-| whole tick | - | 37.808 | 5.153 | 100.0% |
+{{serial_tbl}}
 
-- Serial fraction at 1 thread: **1.6%** (Amdahl ceiling 61.9x)
-- Serial fraction at 16 threads: **12.2%** (Amdahl ceiling 8.2x)
-
-The serial fraction is larger at 16 threads because the parallel phases shrink while the serial ones do not -- that is precisely what the ceiling means.
-
-**Reading this honestly:** the measured serial phases are only 1.6% of a
-one-thread tick, which puts the Amdahl ceiling at 61.9x — far above the
-7.68x actually observed at 16 threads. So Amdahl is *not* what limits this
+**Reading this honestly:** the measured serial phases are only {{serial1}}% of a
+one-thread tick, which puts the Amdahl ceiling at {{ceiling}}x — far above the
+{{sp16}} actually observed at 16 threads. So Amdahl is *not* what limits this
 workload. Two things are:
 
 1. **Core heterogeneity.** This machine has 6 performance cores and 12
-   efficiency cores. Parallel efficiency is 98% at 2 threads and 92%
-   at 4 — all on P-cores — and then falls to 64% at 8 and 48% at 16
+   efficiency cores. Parallel efficiency is {{eff2}} at 2 threads and {{eff4}}
+   at 4 — all on P-cores — and then falls to {{eff8}} at 8 and {{eff16}} at 16
    as the E-cores join. The knee lands exactly where it should if an E-core runs
    at roughly 40% of a P-core. P4 alone, the phase that is actually parallel,
-   speeds up 9.4x.
+   speeds up {{p4_speedup}}.
 2. **The serial fraction is measured, not fixed.** At 16 threads the parallel
    phases have shrunk by ~10x while the serial ones have not, so the same
-   absolute serial work is now 12.2% of the tick. That is what an Amdahl
+   absolute serial work is now {{serial16}}% of the tick. That is what an Amdahl
    ceiling means in practice.
 
 ### Neighbour search: naive vs counting-sort grid
 
-| agents | food | world | naive ms/tick | grid ms/tick | speedup |
-|---:|---:|---:|---:|---:|---:|
-| 100 | 200 | 158^2 | 0.068 | 0.018 | 3.9x |
-| 1000 | 2000 | 500^2 | 3.593 | 0.083 | 43.2x |
-| 5000 | 10000 | 1118^2 | 106.999 | 0.618 | 173.1x |
-| 10000 | 20000 | 1581^2 | 485.253 | 1.373 | 353.4x |
-| 25000 | 50000 | 2500^2 | 3282.271 | 4.053 | 809.8x |
-| 50000 | 100000 | 3536^2 | 13258.650 | 8.555 | 1549.8x |
-| 100000 | 200000 | 5000^2 | - | 18.118 | - |
-| 200000 | 400000 | 7071^2 | - | 38.364 | - |
-| 400000 | 800000 | 10000^2 | - | 100.507 | - |
+{{neighbours}}
 
-Up to **1550x**. Agents sustainable at 60 Hz (16.67 ms/tick) rise
-from **2,070** on the naive path to **92,578** on the grid.
+Up to **{{grid_speedup}}x**. Agents sustainable at 60 Hz (16.67 ms/tick) rise
+from **{{naive60}}** on the naive path to **{{grid60}}** on the grid.
 
 ### Memory layout: SoA vs AoS
 
-The kernel touches 4 of the 9 per-agent fields (32 of 80 bytes). SoA streams
-four dense arrays; AoS strides over the whole struct and pulls the other five
-fields into cache for nothing.
+{{layout}}
 
-| agents | SoA working set (MiB) | AoS working set (MiB) | SoA ns/agent | AoS ns/agent | SoA speedup |
-|---:|---:|---:|---:|---:|---:|
-| 50000 | 1.53 | 3.81 | 0.474 | 0.785 | 1.66x |
-| 500000 | 15.26 | 38.15 | 0.485 | 1.095 | 2.26x |
-| 4000000 | 122.07 | 305.18 | 0.486 | 1.277 | 2.63x |
-
-The gap widens with the working set — 1.66x at 50k agents, 2.63x at 4M — which
+The gap widens with the working set — {{soa_50k}} at 50k agents, {{soa}} at 4M — which
 is the signature of a cache effect rather than an instruction-count one. SoA is
 also timed first in each pair, so it pays the cold-cache cost and the numbers
 are conservative.
 
 ### False sharing: a negative result worth reporting
 
-65536 cache-resident values, swept 96 times per chunk, 20 reductions. This machine reports a 256-byte cache line, so the textbook `alignas(64)` still leaves two slots sharing one coherence granule.
-
-| threads | unpadded ms | alignas(64) ms | alignas(256) ms | fix vs unpadded | shipped (local acc) ms |
-|---:|---:|---:|---:|---:|---:|
-| 1 | 257.5 | 252.3 | 279.0 | 0.92x | 60.6 |
-| 2 | 128.7 | 128.6 | 142.2 | 0.91x | 32.0 |
-| 4 | 67.2 | 67.4 | 81.2 | 0.83x | 16.2 |
-| 8 | 41.2 | 40.0 | 43.4 | 0.95x | 9.8 |
-| 16 | 22.5 | 22.6 | 24.6 | 0.92x | 7.2 |
-
-The last column is what evosim actually ships -- accumulate in a local and store to the slot once per chunk. It sidesteps the problem rather than padding around it, and beats every padded variant.
+{{sharing}}
 
 **This is the benchmark that did not reproduce, and that is the finding.** The
 textbook expectation is a dramatic graph. On this hardware padding is not merely
-neutral, it is very slightly *counterproductive* — 0.83–0.95x at every
+neutral, it is very slightly *counterproductive* — {{fs_lo}}–{{fs_hi}}x at every
 thread count — because spreading 64 slots across 16 KB costs more in cache
 footprint than the coherence traffic it avoids.
 
@@ -475,10 +417,10 @@ the timestep is ever changed.
   in the population, while sense radius evolves per-agent. One long-sighted
   outlier inflates every cell. A two-level grid, or clamping the cell size to a
   high percentile and handling the tail separately, would fix it.
-- **P7 compaction is serial**, at 2.3% of a 16-thread tick. A parallel stream compaction (per-chunk survivor
+- **P7 compaction is serial**, at {{p7_share}} of a 16-thread tick. A parallel stream compaction (per-chunk survivor
   counts, prefix sum, parallel scatter) would work, and it is the same shape as
   the counting sort already in `spatial_grid.cpp`.
-- **P2's prefix sum is 6.0% of a 16-thread tick** and grows with cell count, so
+- **P2's prefix sum is {{p2_share}} of a 16-thread tick** and grows with cell count, so
   it is now the biggest serial term. A parallel scan would help more than
   anything else on this list.
 - **The per-chunk histogram for the parallel scatter costs `chunks * n_cells`**,
@@ -499,14 +441,14 @@ false-sharing improvement, which this hardware does not support (see above).
 >   counter-based stateless RNG and fixed-order reductions over a thread-count-
 >   independent chunk decomposition to eliminate scheduling-dependent results.
 > - Parallelised the simulation step across a hand-rolled thread pool and
->   reusable barrier, reaching **7.68x at 16 threads on 200,000 agents**
->   (39.401 → 5.131 ms/tick) with a directly measured serial fraction of
->   1.6%, and identified core heterogeneity rather than Amdahl as the
+>   reusable barrier, reaching **{{sp16}} at 16 threads on 200,000 agents**
+>   ({{ms1}} → {{ms16}} ms/tick) with a directly measured serial fraction of
+>   {{serial1}}%, and identified core heterogeneity rather than Amdahl as the
 >   binding constraint.
 > - Implemented a counting-sort spatial grid for neighbour queries, cutting
->   per-tick proximity checks from O(n²) to near-linear — **1550x**
+>   per-tick proximity checks from O(n²) to near-linear — **{{grid_speedup}}x**
 >   at 50,000 agents — and raising the agent count sustainable at 60 Hz from
->   2,070 to 92,578.
+>   {{naive60}} to {{grid60}}.
 > - Traced a debug-vs-release hash divergence to clang fusing `sin`/`cos` into
 >   `__sincos_stret` at `-O3`, and replaced libm's transcendentals with
 >   in-house implementations, making output reproducible across optimisation

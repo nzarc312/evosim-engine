@@ -1,0 +1,718 @@
+<title>Commons Timeline</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans+Condensed:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500&display=swap">
+<style>
+  :root {
+    --ground:   #F1F3F2;
+    --surface:  #FFFFFF;
+    --sunken:   #E7EBEA;
+    --ink:      #121716;
+    --muted:    #5B6664;
+    --faint:    #8C9793;
+    --hairline: #D7DDDB;
+    --hairline-strong: #BFC8C5;
+
+    --prudent:  #2E6FB7;
+    --midgreed: #8E9A97;
+    --greedy:   #C8392F;
+    --biomass:  #3F8A52;
+    --dead:     #9A7470;
+
+    --ev-crash:      #C8392F;
+    --ev-boom:       #3F8A52;
+    --ev-extinction: #8B2420;
+    --ev-resource:   #B4762C;
+    --ev-peak:       #2E6FB7;
+    --ev-greed:      #7A5AA8;
+
+    --canvas-bg: #ECF0EE;
+    --shadow: 0 1px 2px rgba(18,23,22,.06), 0 6px 18px rgba(18,23,22,.05);
+  }
+  :root:not([data-theme="light"]) { color-scheme: light dark; }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --ground:   #0D1110;
+      --surface:  #151A19;
+      --sunken:   #101514;
+      --ink:      #E4EAE8;
+      --muted:    #99A5A2;
+      --faint:    #6E7A77;
+      --hairline: #242C2A;
+      --hairline-strong: #35403D;
+      --prudent:  #5A9BDE;
+      --midgreed: #7E8987;
+      --greedy:   #E4574B;
+      --biomass:  #5CB073;
+      --dead:     #7A5A56;
+      --ev-crash:      #E4574B;
+      --ev-boom:       #5CB073;
+      --ev-extinction: #C0453C;
+      --ev-resource:   #D69A46;
+      --ev-peak:       #5A9BDE;
+      --ev-greed:      #A88ED6;
+      --canvas-bg: #0A0E0D;
+      --shadow: 0 1px 2px rgba(0,0,0,.4), 0 6px 18px rgba(0,0,0,.3);
+    }
+  }
+  :root[data-theme="dark"] {
+    --ground:   #0D1110;
+    --surface:  #151A19;
+    --sunken:   #101514;
+    --ink:      #E4EAE8;
+    --muted:    #99A5A2;
+    --faint:    #6E7A77;
+    --hairline: #242C2A;
+    --hairline-strong: #35403D;
+    --prudent:  #5A9BDE;
+    --midgreed: #7E8987;
+    --greedy:   #E4574B;
+    --biomass:  #5CB073;
+    --dead:     #7A5A56;
+    --ev-crash:      #E4574B;
+    --ev-boom:       #5CB073;
+    --ev-extinction: #C0453C;
+    --ev-resource:   #D69A46;
+    --ev-peak:       #5A9BDE;
+    --ev-greed:      #A88ED6;
+    --canvas-bg: #0A0E0D;
+    --shadow: 0 1px 2px rgba(0,0,0,.4), 0 6px 18px rgba(0,0,0,.3);
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    margin: 0;
+    background: var(--ground);
+    color: var(--ink);
+    font-family: "IBM Plex Sans", system-ui, -apple-system, sans-serif;
+    font-size: 14px;
+    line-height: 1.5;
+  }
+
+  .wrap { max-width: 1360px; margin: 0 auto; padding: 22px 20px 40px; }
+
+  /* ---------- masthead ---------- */
+  .masthead {
+    display: flex; flex-wrap: wrap; align-items: baseline;
+    gap: 8px 18px; padding-bottom: 14px; margin-bottom: 18px;
+    border-bottom: 1px solid var(--hairline-strong);
+  }
+  h1 {
+    font-family: "IBM Plex Sans Condensed", "IBM Plex Sans", sans-serif;
+    font-weight: 700; font-size: 25px; letter-spacing: -0.01em;
+    margin: 0; text-wrap: balance;
+  }
+  .standfirst { color: var(--muted); max-width: 62ch; margin: 0; flex: 1 1 340px; }
+  .runid {
+    font-family: "IBM Plex Mono", ui-monospace, monospace;
+    font-size: 11px; color: var(--faint); letter-spacing: .02em;
+    white-space: nowrap;
+  }
+
+  .runbar { display: grid; grid-template-columns: minmax(220px, 360px) 1fr; gap: 14px 20px; align-items: center; margin-bottom: 16px; }
+  @media (max-width: 760px) { .runbar { grid-template-columns: 1fr; } }
+  .runblurb { margin: 0; color: var(--muted); font-size: 13px; max-width: 70ch; }
+  .runblurb b { color: var(--ink); font-weight: 500; }
+
+  /* ---------- console ---------- */
+  .console { display: grid; grid-template-columns: minmax(0,1fr) 268px; gap: 18px; align-items: start; }
+  @media (max-width: 900px) { .console { grid-template-columns: minmax(0,1fr); } }
+
+  .stage {
+    position: relative; background: var(--canvas-bg);
+    border: 1px solid var(--hairline); border-radius: 3px; overflow: hidden;
+  }
+  .stage canvas { display: block; width: 100%; aspect-ratio: 1 / 1; }
+  .stagetag {
+    position: absolute; left: 10px; top: 9px;
+    font-family: "IBM Plex Mono", monospace; font-size: 10.5px;
+    letter-spacing: .07em; text-transform: uppercase; color: var(--faint);
+    pointer-events: none;
+  }
+
+  .rail { display: flex; flex-direction: column; gap: 14px; }
+  .panel {
+    background: var(--surface); border: 1px solid var(--hairline);
+    border-radius: 3px; padding: 13px 14px;
+  }
+  .panel h2 {
+    font-family: "IBM Plex Sans Condensed", sans-serif;
+    font-size: 10.5px; font-weight: 600; letter-spacing: .1em;
+    text-transform: uppercase; color: var(--faint);
+    margin: 0 0 10px;
+  }
+
+  .readout { display: grid; grid-template-columns: 1fr auto; gap: 6px 10px; }
+  .readout dt { color: var(--muted); font-size: 12.5px; }
+  .readout dd {
+    margin: 0; font-family: "IBM Plex Mono", monospace; font-weight: 500;
+    font-variant-numeric: tabular-nums; text-align: right; font-size: 13px;
+  }
+  .tickline {
+    font-family: "IBM Plex Mono", monospace; font-variant-numeric: tabular-nums;
+    font-size: 27px; font-weight: 600; letter-spacing: -0.02em; line-height: 1.1;
+  }
+  .tickline span { font-size: 12px; color: var(--faint); font-weight: 400; }
+
+  .segbar { display: flex; gap: 0; border: 1px solid var(--hairline-strong); border-radius: 3px; overflow: hidden; }
+  .segbar button {
+    flex: 1; appearance: none; border: 0; background: var(--surface);
+    color: var(--muted); padding: 6px 4px; cursor: pointer;
+    font-family: "IBM Plex Sans Condensed", sans-serif; font-size: 11.5px;
+    font-weight: 600; letter-spacing: .06em; text-transform: uppercase;
+  }
+  .segbar button + button { border-left: 1px solid var(--hairline-strong); }
+  .segbar button[aria-pressed="true"] { background: var(--ink); color: var(--ground); }
+
+  .ramp { height: 9px; border-radius: 2px; margin: 4px 0 5px; }
+  .ramplabels { display: flex; justify-content: space-between; font-size: 11px; color: var(--faint); }
+  .swatches { display: grid; gap: 6px; margin-top: 4px; }
+  .swatch { display: grid; grid-template-columns: 12px 1fr; gap: 8px; align-items: center; font-size: 12px; color: var(--muted); }
+  .dot { width: 9px; height: 9px; border-radius: 50%; justify-self: center; }
+
+  /* ---------- timeline ---------- */
+  .timeline { margin-top: 18px; }
+  .tlhead { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; margin-bottom: 8px; }
+  .tlhead h2 {
+    font-family: "IBM Plex Sans Condensed", sans-serif;
+    font-size: 10.5px; font-weight: 600; letter-spacing: .1em;
+    text-transform: uppercase; color: var(--faint); margin: 0;
+  }
+  .tlhead .hint { font-size: 11.5px; color: var(--faint); }
+
+  .tlbox { background: var(--surface); border: 1px solid var(--hairline); border-radius: 3px; padding: 10px 12px 12px; }
+  .markers { position: relative; height: 26px; }
+  .marker {
+    position: absolute; top: 0; transform: translateX(-50%);
+    width: 15px; height: 24px; padding: 0; border: 0; background: none;
+    cursor: pointer; display: grid; place-items: end center;
+  }
+  .marker i { display: block; width: 2px; height: 13px; background: currentColor; border-radius: 1px; }
+  .marker b { display: block; width: 7px; height: 7px; border-radius: 50%; background: currentColor; margin-bottom: 1px; }
+  .marker:hover i, .marker:focus-visible i { height: 17px; }
+  .marker:focus-visible { outline: 2px solid var(--ink); outline-offset: 1px; border-radius: 2px; }
+
+  .chart { position: relative; }
+  .chart canvas { display: block; width: 100%; height: 132px; }
+  .playhead { position: absolute; top: 0; bottom: 0; width: 1px; background: var(--ink); pointer-events: none; }
+
+  .axis { display: flex; justify-content: space-between; font-family: "IBM Plex Mono", monospace; font-size: 10.5px; color: var(--faint); margin-top: 3px; }
+
+  .scrub { width: 100%; margin: 10px 0 0; accent-color: var(--ink); }
+
+  .transport { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-top: 10px; }
+  .transport button {
+    appearance: none; background: var(--surface); color: var(--ink);
+    border: 1px solid var(--hairline-strong); border-radius: 3px;
+    padding: 5px 11px; cursor: pointer;
+    font-family: "IBM Plex Sans Condensed", sans-serif; font-size: 12px;
+    font-weight: 600; letter-spacing: .04em;
+  }
+  .transport button:hover { border-color: var(--ink); }
+  .transport button:focus-visible { outline: 2px solid var(--ink); outline-offset: 1px; }
+  .transport .primary { background: var(--ink); color: var(--ground); border-color: var(--ink); min-width: 74px; }
+  .transport .spacer { flex: 1; }
+  .transport label { font-size: 12px; color: var(--muted); display: flex; align-items: center; gap: 6px; }
+
+  .eventnote {
+    margin-top: 12px; padding: 10px 12px; border-left: 2px solid var(--hairline-strong);
+    background: var(--sunken); border-radius: 0 3px 3px 0; min-height: 46px;
+  }
+  .eventnote strong {
+    font-family: "IBM Plex Sans Condensed", sans-serif; letter-spacing: .02em;
+    display: block; font-size: 13px;
+  }
+  .eventnote span { color: var(--muted); font-size: 12.5px; }
+  .eventnote.empty span { color: var(--faint); }
+
+  .footnote { margin-top: 20px; color: var(--muted); font-size: 12.5px; max-width: 78ch; }
+  .footnote code { font-family: "IBM Plex Mono", monospace; font-size: 11.5px; background: var(--sunken); padding: 1px 4px; border-radius: 2px; }
+
+  @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+</style>
+
+<div class="wrap">
+  <header class="masthead">
+    <h1>Commons Timeline</h1>
+    <p class="standfirst" id="standfirst">Scrub a deterministic run of EvoSim. Every dot is an agent; every square is a renewable food source that can be harvested to death.</p>
+    <div class="runid" id="runid"></div>
+  </header>
+
+  <div class="runbar">
+    <div class="segbar" id="runswitch" role="group" aria-label="Which run to view"></div>
+    <p class="runblurb" id="runblurb"></p>
+  </div>
+
+  <div class="console">
+    <div class="stage">
+      <span class="stagetag" id="stagetag">world</span>
+      <canvas id="world" width="900" height="900"></canvas>
+    </div>
+
+    <div class="rail">
+      <div class="panel">
+        <h2>At this tick</h2>
+        <div class="tickline" id="tickval">0 <span>tick</span></div>
+        <dl class="readout" id="readout">
+          <dt>Agents</dt><dd id="r-pop">—</dd>
+          <dt>Live sources</dt><dd id="r-src">—</dd>
+          <dt>Standing biomass</dt><dd id="r-stock">—</dd>
+          <dt>Mean greed</dt><dd id="r-greed">—</dd>
+          <dt>Greed spread</dt><dd id="r-gsd">—</dd>
+          <dt>Mean sense</dt><dd id="r-sense">—</dd>
+        </dl>
+      </div>
+
+      <div class="panel">
+        <h2>Colour agents by</h2>
+        <div class="segbar" role="group" aria-label="Agent colour mode">
+          <button id="mode-greed" aria-pressed="true">Greed</button>
+          <button id="mode-lineage" aria-pressed="false">Lineage</button>
+        </div>
+        <div id="legend-greed">
+          <div class="ramp" id="ramp"></div>
+          <div class="ramplabels"><span>prudent 0.0</span><span>greedy 1.0</span></div>
+        </div>
+        <div id="legend-lineage" hidden>
+          <p style="margin:6px 0 0;font-size:12px;color:var(--muted)">One hue per founding lineage, inherited unchanged by every descendant. Watch a single hue take over the world.</p>
+        </div>
+        <div class="swatches">
+          <div class="swatch"><span class="dot" style="background:var(--biomass)"></span><span>Live source, sized by stock</span></div>
+          <div class="swatch"><span class="dot" style="background:var(--dead)"></span><span>Collapsed source, gone for good</span></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <section class="timeline">
+    <div class="tlhead">
+      <h2>Timeline</h2>
+      <span class="hint">Space plays · ← → step · Shift+← → jump 10 · [ ] pivotal moments</span>
+    </div>
+    <div class="tlbox">
+      <div class="markers" id="markers"></div>
+      <div class="chart">
+        <canvas id="strip" width="1600" height="264"></canvas>
+        <div class="playhead" id="playhead"></div>
+      </div>
+      <div class="axis"><span id="ax0">0</span><span id="ax1"></span></div>
+      <input class="scrub" id="scrub" type="range" min="0" max="0" value="0" step="1" aria-label="Timeline position">
+      <div class="transport">
+        <button class="primary" id="play">Play</button>
+        <button id="back10">−10</button>
+        <button id="back1">−1</button>
+        <button id="fwd1">+1</button>
+        <button id="fwd10">+10</button>
+        <span class="spacer"></span>
+        <button id="prevev">◀ Pivotal</button>
+        <button id="nextev">Pivotal ▶</button>
+        <label>Speed
+          <select id="speed">
+            <option value="1">1×</option>
+            <option value="2" selected>2×</option>
+            <option value="4">4×</option>
+            <option value="8">8×</option>
+          </select>
+        </label>
+      </div>
+      <div class="eventnote empty" id="eventnote"><strong>No pivotal moment here</strong><span>Use the markers above, or [ and ] to jump between them.</span></div>
+    </div>
+  </section>
+
+  <p class="footnote" id="footnote"></p>
+</div>
+
+<script id="payload" type="application/json">__PAYLOAD__</script>
+<script id="frames" type="text/plain">__FRAMES_B64__</script>
+<script>
+(function () {
+  "use strict";
+
+  var P = JSON.parse(document.getElementById("payload").textContent);
+  var RUNS = P.runs;
+
+  // Everything below reads through these; selectRun() repoints them. The frame
+  // blobs for all runs live in one buffer, so a run's frames start at its base.
+  var RUN, META, EVENTS, SERIES, OFF, BASE, N_SRC, N_FRAMES, T0, T1;
+
+  // ---- decode the frame blob ----
+  var b64 = document.getElementById("frames").textContent.trim();
+  var bin = atob(b64);
+  var bytes = new Uint8Array(bin.length);
+  for (var i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+  var dv = new DataView(bytes.buffer);
+
+
+  // Frame layout, little-endian. Header is 40 bytes:
+  //   0 u64 tick | 8 u32 pop | 12 u32 sources
+  //   16 f32 greed | 20 f32 greedSd | 24 f32 speed | 28 f32 sense | 32 f32 stock
+  //   36 u32 nAgents
+  //   40.. nAgents x { u16 x, u16 y, u8 greed, u16 lineage }   (7 bytes)
+  //   then nSources x { u16 x, u16 y, u8 stock }               (5 bytes, 0 = collapsed)
+  var HDR = 40;
+  function frame(i) {
+    var p = BASE + OFF[i];
+    var nAgents = dv.getUint32(p + 36, true);
+    return {
+      tick: Number(dv.getBigUint64(p, true)),
+      pop: dv.getUint32(p + 8, true),
+      src: dv.getUint32(p + 12, true),
+      greed: dv.getFloat32(p + 16, true),
+      greedSd: dv.getFloat32(p + 20, true),
+      speed: dv.getFloat32(p + 24, true),
+      sense: dv.getFloat32(p + 28, true),
+      stock: dv.getFloat32(p + 32, true),
+      nAgents: nAgents,
+      agents: p + HDR,
+      sources: p + HDR + nAgents * 7
+    };
+  }
+
+  // ---- colour ----
+  function cssVar(n) { return getComputedStyle(document.documentElement).getPropertyValue(n).trim(); }
+  function hex2rgb(h) {
+    h = h.replace("#", "");
+    return [parseInt(h.slice(0, 2), 16), parseInt(h.slice(2, 4), 16), parseInt(h.slice(4, 6), 16)];
+  }
+  var PAL = {};
+  function refreshPalette() {
+    PAL.prudent = hex2rgb(cssVar("--prudent"));
+    PAL.mid     = hex2rgb(cssVar("--midgreed"));
+    PAL.greedy  = hex2rgb(cssVar("--greedy"));
+    PAL.biomass = cssVar("--biomass");
+    PAL.dead    = cssVar("--dead");
+    PAL.ink     = cssVar("--ink");
+    PAL.muted   = cssVar("--muted");
+    PAL.faint   = cssVar("--faint");
+    PAL.hair    = cssVar("--hairline");
+    PAL.bg      = cssVar("--canvas-bg");
+    var g = document.getElementById("ramp");
+    g.style.background = "linear-gradient(90deg," + cssVar("--prudent") + "," +
+                         cssVar("--midgreed") + "," + cssVar("--greedy") + ")";
+  }
+  // Diverging blue -> neutral -> red. Greed 0 is prudent, 1 is greedy.
+  var GREED_LUT = new Array(256);
+  function buildLut() {
+    for (var i = 0; i < 256; i++) {
+      var t = i / 255, a, b, u;
+      if (t < 0.5) { a = PAL.prudent; b = PAL.mid; u = t / 0.5; }
+      else         { a = PAL.mid;     b = PAL.greedy; u = (t - 0.5) / 0.5; }
+      GREED_LUT[i] = "rgb(" + Math.round(a[0] + (b[0] - a[0]) * u) + "," +
+                              Math.round(a[1] + (b[1] - a[1]) * u) + "," +
+                              Math.round(a[2] + (b[2] - a[2]) * u) + ")";
+    }
+  }
+  var LIN_LUT = new Array(512);
+  for (var k = 0; k < 512; k++) {
+    // Golden-angle hues so neighbouring lineage ids stay visually distinct.
+    LIN_LUT[k] = "hsl(" + ((k * 137.508) % 360).toFixed(1) + ",62%,55%)";
+  }
+
+  // ---- world canvas ----
+  var wc = document.getElementById("world");
+  var wg = wc.getContext("2d");
+  var colourMode = "greed";
+
+  function sizeCanvas(c, cssH) {
+    var r = c.getBoundingClientRect();
+    var dpr = Math.min(window.devicePixelRatio || 1, 2);
+    var w = Math.max(1, Math.round(r.width * dpr));
+    var h = Math.max(1, Math.round((cssH || r.width) * dpr));
+    if (c.width !== w || c.height !== h) { c.width = w; c.height = h; }
+    return dpr;
+  }
+
+  function drawWorld(f) {
+    sizeCanvas(wc);
+    var W = wc.width, H = wc.height;
+    wg.fillStyle = PAL.bg;
+    wg.fillRect(0, 0, W, H);
+
+    var sx = W / 65535, sy = H / 65535;
+    var srcR = Math.max(1.1, W / 520);
+
+    // sources first: the resource is the backdrop the agents are consuming
+    var p = f.sources;
+    for (var i = 0; i < N_SRC; i++, p += 5) {
+      var x = dv.getUint16(p, true) * sx;
+      var y = dv.getUint16(p + 2, true) * sy;
+      var s = bytes[p + 4];
+      if (s === 0) {
+        wg.fillStyle = PAL.dead;
+        wg.globalAlpha = 0.5;
+        wg.fillRect(x - srcR * 0.5, y - srcR * 0.5, srcR, srcR);
+      } else {
+        var frac = (s - 1) / 254;
+        wg.fillStyle = PAL.biomass;
+        wg.globalAlpha = 0.25 + 0.6 * frac;
+        var r = srcR * (0.55 + 0.9 * frac);
+        wg.fillRect(x - r * 0.5, y - r * 0.5, r, r);
+      }
+    }
+    wg.globalAlpha = 1;
+
+    // agents on top
+    var ar = Math.max(1.3, W / 400);
+    p = f.agents;
+    for (var j = 0; j < f.nAgents; j++, p += 7) {
+      var ax = dv.getUint16(p, true) * sx;
+      var ay = dv.getUint16(p + 2, true) * sy;
+      wg.fillStyle = colourMode === "greed"
+        ? GREED_LUT[bytes[p + 4]]
+        : LIN_LUT[dv.getUint16(p + 5, true) % 512];
+      wg.beginPath();
+      wg.arc(ax, ay, ar, 0, 6.28318);
+      wg.fill();
+    }
+  }
+
+  // ---- strip chart ----
+  var sc = document.getElementById("strip");
+  var sg = sc.getContext("2d");
+
+  function track(vals, x0, y0, w, h, colour, fill) {
+    var max = 0;
+    for (var i = 0; i < vals.length; i++) if (vals[i] > max) max = vals[i];
+    if (max <= 0) max = 1;
+    sg.beginPath();
+    for (var k = 0; k < vals.length; k++) {
+      var x = x0 + (SERIES.tick[k] - T0) / (T1 - T0 || 1) * w;
+      var y = y0 + h - (vals[k] / max) * h;
+      k ? sg.lineTo(x, y) : sg.moveTo(x, y);
+    }
+    if (fill) {
+      sg.lineTo(x0 + w, y0 + h); sg.lineTo(x0, y0 + h); sg.closePath();
+      sg.fillStyle = fill; sg.fill();
+      sg.beginPath();
+      for (var m = 0; m < vals.length; m++) {
+        var xx = x0 + (SERIES.tick[m] - T0) / (T1 - T0 || 1) * w;
+        var yy = y0 + h - (vals[m] / max) * h;
+        m ? sg.lineTo(xx, yy) : sg.moveTo(xx, yy);
+      }
+    }
+    var rectW = sc.getBoundingClientRect().width;
+    sg.strokeStyle = colour;
+    sg.lineWidth = 1.6 * (rectW > 0 ? sc.width / rectW : 2);
+    sg.stroke();
+    return max;
+  }
+
+  function drawStrip() {
+    var dpr = sizeCanvas(sc, 132);
+    var W = sc.width, H = sc.height;
+    sg.clearRect(0, 0, W, H);
+    var pad = 6 * dpr, lane = (H - pad * 2) / 3, gap = 4 * dpr;
+
+    // three tracks: population, live sources, mean greed
+    var m1 = track(SERIES.population, 0, pad, W, lane - gap, cssVar("--ink"), null);
+    var m2 = track(SERIES.food_active, 0, pad + lane, W, lane - gap, cssVar("--biomass"), null);
+    var m3 = track(SERIES.mean_greed, 0, pad + lane * 2, W, lane - gap, cssVar("--greedy"), null);
+
+    sg.font = (10 * dpr) + "px 'IBM Plex Mono', monospace";
+    sg.fillStyle = PAL.faint;
+    sg.textBaseline = "top";
+    sg.fillText("agents · peak " + Math.round(m1).toLocaleString(), 4 * dpr, pad + 1 * dpr);
+    sg.fillText("live sources · peak " + Math.round(m2).toLocaleString(), 4 * dpr, pad + lane + 1 * dpr);
+    sg.fillText("mean greed · peak " + m3.toFixed(2), 4 * dpr, pad + lane * 2 + 1 * dpr);
+
+    sg.strokeStyle = PAL.hair; sg.lineWidth = 1 * dpr;
+    for (var i = 1; i < 3; i++) {
+      sg.beginPath(); sg.moveTo(0, pad + lane * i - gap / 2);
+      sg.lineTo(W, pad + lane * i - gap / 2); sg.stroke();
+    }
+  }
+
+  // ---- events ----
+  var EV_COLOUR = {
+    crash: "--ev-crash", boom: "--ev-boom", extinction: "--ev-extinction",
+    resource: "--ev-resource", recovery: "--ev-boom", peak: "--ev-peak",
+    "greed-up": "--ev-greed", "greed-down": "--ev-greed"
+  };
+  var markersEl = document.getElementById("markers");
+  function buildMarkers() {
+    markersEl.innerHTML = "";
+    EVENTS.forEach(function (e, idx) {
+      var b = document.createElement("button");
+      b.className = "marker";
+      b.style.left = ((e.tick - T0) / (T1 - T0 || 1) * 100) + "%";
+      b.style.color = cssVar(EV_COLOUR[e.kind] || "--ev-peak");
+      b.title = e.label + " — tick " + e.tick.toLocaleString();
+      b.setAttribute("aria-label", b.title);
+      b.innerHTML = "<b></b><i></i>";
+      b.addEventListener("click", function () { goToTick(e.tick); showEvent(idx); });
+      markersEl.appendChild(b);
+    });
+  }
+  var noteEl = document.getElementById("eventnote");
+  function showEvent(idx) {
+    var e = EVENTS[idx];
+    noteEl.className = "eventnote";
+    noteEl.innerHTML = "<strong style=\"color:" + cssVar(EV_COLOUR[e.kind] || "--ev-peak") + "\">" +
+      e.label + " · tick " + e.tick.toLocaleString() + "</strong><span>" + e.detail + "</span>";
+  }
+  function clearEvent() {
+    noteEl.className = "eventnote empty";
+    noteEl.innerHTML = "<strong>No pivotal moment here</strong><span>Use the markers above, or [ and ] to jump between them.</span>";
+  }
+
+  // ---- playback ----
+  var cur = 0, playing = false, acc = 0, last = 0;
+  var scrub = document.getElementById("scrub");
+
+  function nearestEvent(tick) {
+    for (var i = 0; i < EVENTS.length; i++)
+      if (Math.abs(EVENTS[i].tick - tick) <= META.every) return i;
+    return -1;
+  }
+
+  function render() {
+    var f = frame(cur);
+    drawWorld(f);
+    document.getElementById("tickval").innerHTML =
+      f.tick.toLocaleString() + " <span>tick</span>";
+    document.getElementById("r-pop").textContent = f.pop.toLocaleString();
+    document.getElementById("r-src").textContent =
+      f.src.toLocaleString() + " / " + P.source_slots.toLocaleString();
+    document.getElementById("r-stock").textContent = Math.round(f.stock).toLocaleString();
+    document.getElementById("r-greed").textContent = f.pop ? f.greed.toFixed(3) : "—";
+    document.getElementById("r-gsd").textContent = f.pop ? "±" + f.greedSd.toFixed(3) : "—";
+    document.getElementById("r-sense").textContent = f.pop ? f.sense.toFixed(2) : "—";
+    document.getElementById("playhead").style.left =
+      ((f.tick - T0) / (T1 - T0 || 1) * 100) + "%";
+    scrub.value = String(cur);
+    var ei = nearestEvent(f.tick);
+    if (ei >= 0) showEvent(ei); else clearEvent();
+  }
+
+  function goTo(i) {
+    cur = Math.max(0, Math.min(N_FRAMES - 1, i));
+    render();
+  }
+  function goToTick(t) {
+    var best = 0, bd = Infinity;
+    for (var i = 0; i < N_FRAMES; i++) {
+      var d = Math.abs(META.ticks[i] - t);
+      if (d < bd) { bd = d; best = i; }
+    }
+    goTo(best);
+  }
+
+  function loop(ts) {
+    if (!playing) return;
+    if (!last) last = ts;
+    var dt = ts - last; last = ts;
+    acc += dt;
+    var per = 1000 / (12 * Number(document.getElementById("speed").value));
+    while (acc >= per) {
+      acc -= per;
+      if (cur >= N_FRAMES - 1) { setPlaying(false); render(); return; }
+      cur++;
+    }
+    render();
+    requestAnimationFrame(loop);
+  }
+  function setPlaying(on) {
+    playing = on; last = 0; acc = 0;
+    document.getElementById("play").textContent = on ? "Pause" : "Play";
+    if (on) requestAnimationFrame(loop);
+  }
+
+  // ---- wiring ----
+  document.getElementById("play").addEventListener("click", function () { setPlaying(!playing); });
+  document.getElementById("back1").addEventListener("click", function () { setPlaying(false); goTo(cur - 1); });
+  document.getElementById("fwd1").addEventListener("click", function () { setPlaying(false); goTo(cur + 1); });
+  document.getElementById("back10").addEventListener("click", function () { setPlaying(false); goTo(cur - 10); });
+  document.getElementById("fwd10").addEventListener("click", function () { setPlaying(false); goTo(cur + 10); });
+  scrub.addEventListener("input", function () { setPlaying(false); goTo(Number(scrub.value)); });
+
+  function jumpEvent(dir) {
+    setPlaying(false);
+    var t = META.ticks[cur], target = null;
+    for (var i = 0; i < EVENTS.length; i++) {
+      var e = EVENTS[dir > 0 ? i : EVENTS.length - 1 - i];
+      if (dir > 0 ? e.tick > t + 1 : e.tick < t - 1) { target = e; break; }
+    }
+    if (target) { goToTick(target.tick); }
+  }
+  document.getElementById("nextev").addEventListener("click", function () { jumpEvent(1); });
+  document.getElementById("prevev").addEventListener("click", function () { jumpEvent(-1); });
+
+  function setMode(m) {
+    colourMode = m;
+    document.getElementById("mode-greed").setAttribute("aria-pressed", String(m === "greed"));
+    document.getElementById("mode-lineage").setAttribute("aria-pressed", String(m === "lineage"));
+    document.getElementById("legend-greed").hidden = m !== "greed";
+    document.getElementById("legend-lineage").hidden = m !== "lineage";
+    document.getElementById("stagetag").textContent = m === "greed" ? "world · coloured by greed" : "world · coloured by lineage";
+    render();
+  }
+  document.getElementById("mode-greed").addEventListener("click", function () { setMode("greed"); });
+  document.getElementById("mode-lineage").addEventListener("click", function () { setMode("lineage"); });
+
+  document.addEventListener("keydown", function (e) {
+    if (e.target.tagName === "SELECT" || e.target.tagName === "INPUT") return;
+    if (e.key === " ") { e.preventDefault(); setPlaying(!playing); }
+    else if (e.key === "ArrowRight") { setPlaying(false); goTo(cur + (e.shiftKey ? 10 : 1)); }
+    else if (e.key === "ArrowLeft") { setPlaying(false); goTo(cur - (e.shiftKey ? 10 : 1)); }
+    else if (e.key === "]") jumpEvent(1);
+    else if (e.key === "[") jumpEvent(-1);
+  });
+
+  var resizeTimer;
+  window.addEventListener("resize", function () {
+    clearTimeout(resizeTimer);
+    resizeTimer = setTimeout(function () { drawStrip(); render(); }, 120);
+  });
+  if (window.matchMedia) {
+    var mq = window.matchMedia("(prefers-color-scheme: dark)");
+    (mq.addEventListener ? mq.addEventListener.bind(mq, "change") : mq.addListener.bind(mq))(function () {
+      refreshPalette(); buildLut(); buildMarkers(); drawStrip(); render();
+    });
+  }
+
+  // ---- run selection ----
+  function selectRun(i) {
+    setPlaying(false);
+    RUN = RUNS[i];
+    META = RUN.meta; EVENTS = RUN.events; SERIES = RUN.series;
+    OFF = RUN.offsets; BASE = RUN.base;
+    N_SRC = META.n_sources; N_FRAMES = META.n_frames;
+    T0 = SERIES.tick[0]; T1 = SERIES.tick[SERIES.tick.length - 1];
+
+    scrub.max = String(N_FRAMES - 1);
+    cur = 0;
+
+    Array.prototype.forEach.call(document.querySelectorAll("#runswitch button"),
+      function (b, k) { b.setAttribute("aria-pressed", String(k === i)); });
+    document.getElementById("runblurb").innerHTML = RUN.blurb;
+    document.getElementById("runid").textContent =
+      META.n_frames + " frames · " + META.total_ticks.toLocaleString() + " ticks · " +
+      META.world_w.toFixed(0) + "×" + META.world_h.toFixed(0) + " world · " +
+      N_SRC.toLocaleString() + " source slots";
+    document.getElementById("ax0").textContent = "tick " + T0.toLocaleString();
+    document.getElementById("ax1").textContent = "tick " + T1.toLocaleString();
+
+    buildMarkers();
+    drawStrip();
+    render();
+  }
+
+  RUNS.forEach(function (r, i) {
+    var b = document.createElement("button");
+    b.textContent = r.label;
+    b.setAttribute("aria-pressed", "false");
+    b.addEventListener("click", function () { selectRun(i); });
+    document.getElementById("runswitch").appendChild(b);
+  });
+
+  // ---- boot ----
+  document.getElementById("footnote").innerHTML = P.caption ||
+    "Recorded with <code>evosim --record</code>. Agent dots are a fixed-stride sample of the population; the counters are the true totals.";
+
+  refreshPalette();
+  buildLut();
+  selectRun(0);
+  setMode("greed");
+})();
+</script>

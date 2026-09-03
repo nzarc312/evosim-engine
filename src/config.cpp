@@ -50,9 +50,15 @@ bool Config::set(const std::string& k, const std::string& raw) {
     if (k == "world.height")              return parse_double(v, world.height);
     if (k == "population.initial_agents") return parse_u32(v, population.initial_agents);
     if (k == "population.max_agents")     return parse_u32(v, population.max_agents);
+    if (k == "population.initial_greed")  return parse_double(v, population.initial_greed);
     if (k == "food.target_count")         return parse_u32(v, food.target_count);
     if (k == "food.spawn_rate")           return parse_u32(v, food.spawn_rate);
-    if (k == "food.energy_per_food")      return parse_double(v, food.energy_per_food);
+    if (k == "food.capacity")            return parse_double(v, food.capacity);
+    if (k == "food.energy_per_unit")     return parse_double(v, food.energy_per_unit);
+    if (k == "food.regen_rate")          return parse_double(v, food.regen_rate);
+    if (k == "food.collapse_threshold")  return parse_double(v, food.collapse_threshold);
+    if (k == "food.recolonise_rate")     return parse_double(v, food.recolonise_rate);
+    if (k == "food.digest_ticks")        return parse_u32(v, food.digest_ticks);
     if (k == "energy.base_cost")          return parse_double(v, energy.base_cost);
     if (k == "energy.move_coef")          return parse_double(v, energy.move_coef);
     if (k == "energy.sense_coef")         return parse_double(v, energy.sense_coef);
@@ -132,7 +138,11 @@ std::string Config::to_string() const {
       << " ; max_agents = " << population.max_agents << "\n"
       << "[food]       target_count = " << food.target_count
       << " ; spawn_rate = " << food.spawn_rate
-      << " ; energy_per_food = " << food.energy_per_food << "\n"
+      << " ; capacity = " << food.capacity << "\n"
+      << "             energy_per_unit = " << food.energy_per_unit
+      << " ; regen_rate = " << food.regen_rate
+      << " ; collapse_threshold = " << food.collapse_threshold
+      << " ; recolonise_rate = " << food.recolonise_rate << "\n"
       << "[energy]     base_cost = " << energy.base_cost
       << " ; move_coef = " << energy.move_coef
       << " ; sense_coef = " << energy.sense_coef << "\n"

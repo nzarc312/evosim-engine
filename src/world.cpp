@@ -31,8 +31,10 @@ void AgentBuffer::resize(size_t n) {
     pos_x.resize(n); pos_y.resize(n);
     vel_x.resize(n); vel_y.resize(n);
     energy.resize(n);
-    gene_speed.resize(n); gene_size.resize(n); gene_sense.resize(n);
+    gene_speed.resize(n); gene_size.resize(n); gene_sense.resize(n); gene_greed.resize(n);
     age.resize(n);
+    cooldown.resize(n);
+    lineage.resize(n);
     alive.resize(n);
 }
 
@@ -43,8 +45,10 @@ void AgentBuffer::reserve(size_t n) {
     pos_x.reserve(n); pos_y.reserve(n);
     vel_x.reserve(n); vel_y.reserve(n);
     energy.reserve(n);
-    gene_speed.reserve(n); gene_size.reserve(n); gene_sense.reserve(n);
+    gene_speed.reserve(n); gene_size.reserve(n); gene_sense.reserve(n); gene_greed.reserve(n);
     age.reserve(n);
+    cooldown.reserve(n);
+    lineage.reserve(n);
     alive.reserve(n);
 }
 
@@ -56,23 +60,30 @@ void AgentBuffer::append_from(const AgentBuffer& s, size_t i) {
     gene_speed.push_back(s.gene_speed[i]);
     gene_size.push_back(s.gene_size[i]);
     gene_sense.push_back(s.gene_sense[i]);
+    gene_greed.push_back(s.gene_greed[i]);
     age.push_back(s.age[i]);
+    cooldown.push_back(s.cooldown[i]);
+    lineage.push_back(s.lineage[i]);
     alive.push_back(s.alive[i]);
 }
 
 void AgentBuffer::append(uint64_t id_, double x, double y, double vx, double vy, double e,
-                         double speed, double size, double sense, uint32_t age_) {
+                         double speed, double size, double sense, double greed,
+                         uint32_t age_, uint32_t lineage_) {
     id.push_back(id_);
     pos_x.push_back(x); pos_y.push_back(y);
     vel_x.push_back(vx); vel_y.push_back(vy);
     energy.push_back(e);
-    gene_speed.push_back(speed); gene_size.push_back(size); gene_sense.push_back(sense);
+    gene_speed.push_back(speed); gene_size.push_back(size);
+    gene_sense.push_back(sense); gene_greed.push_back(greed);
     age.push_back(age_);
+    cooldown.push_back(0);
+    lineage.push_back(lineage_);
     alive.push_back(1);
 }
 
 void FoodBuffer::resize(size_t n) {
-    pos_x.resize(n); pos_y.resize(n); active.resize(n);
+    pos_x.resize(n); pos_y.resize(n); stock.resize(n); alive.resize(n);
 }
 
 // ---------------------------------------------------------------------------
@@ -103,12 +114,19 @@ void World::seed_population() {
         front_.gene_speed[i] = genome::seed_trait(genome::kSpeed, seed_, id, 2);
         front_.gene_size[i]  = genome::seed_trait(genome::kSize,  seed_, id, 3);
         front_.gene_sense[i] = genome::seed_trait(genome::kSense, seed_, id, 4);
+        front_.gene_greed[i] = cfg_.population.initial_greed < 0.0
+                                   ? genome::seed_trait(genome::kGreed, seed_, id, 6)
+                                   : genome::kGreed.clamp(cfg_.population.initial_greed);
+        // Founders each start their own lineage; descendants inherit it
+        // unchanged, so a lineage is a family tree, not a trait class.
+        front_.lineage[i]    = static_cast<uint32_t>(i);
 
         const double heading = kTwoPi * rng::unit(rng::draw(seed_, id, 0, rng::Purpose::InitAgent, 5));
         front_.vel_x[i] = mathd::dcos(heading) * front_.gene_speed[i];
         front_.vel_y[i] = mathd::dsin(heading) * front_.gene_speed[i];
         front_.energy[i] = kInitialEnergy;
-        front_.age[i]    = 0;
+        front_.age[i]      = 0;
+        front_.cooldown[i] = 0;
         front_.alive[i]  = 1;
     }
     stats_.population = n;
@@ -118,11 +136,13 @@ void World::seed_food() {
     const size_t n = cfg_.food.target_count;
     food_.resize(n);
     for (size_t i = 0; i < n; ++i) {
-        food_.pos_x[i]  = rng::range(seed_, i, 0, rng::Purpose::FoodSpawn, 0, 0.0, cfg_.world.width);
-        food_.pos_y[i]  = rng::range(seed_, i, 0, rng::Purpose::FoodSpawn, 1, 0.0, cfg_.world.height);
-        food_.active[i] = 1;
+        food_.pos_x[i] = rng::range(seed_, i, 0, rng::Purpose::FoodSpawn, 0, 0.0, cfg_.world.width);
+        food_.pos_y[i] = rng::range(seed_, i, 0, rng::Purpose::FoodSpawn, 1, 0.0, cfg_.world.height);
+        food_.stock[i] = cfg_.food.capacity;
+        food_.alive[i] = 1;
     }
     stats_.food_active = n;
+    stats_.stock_total = cfg_.food.capacity * static_cast<double>(n);
 }
 
 uint64_t World::state_hash() const {
@@ -144,7 +164,10 @@ uint64_t World::state_hash() const {
         h = hash::f64(h, front_.gene_speed[i]);
         h = hash::f64(h, front_.gene_size[i]);
         h = hash::f64(h, front_.gene_sense[i]);
+        h = hash::f64(h, front_.gene_greed[i]);
         h = hash::u32(h, front_.age[i]);
+        h = hash::u32(h, front_.cooldown[i]);
+        h = hash::u32(h, front_.lineage[i]);
         h = hash::u8 (h, front_.alive[i]);
     }
 
@@ -153,8 +176,10 @@ uint64_t World::state_hash() const {
     for (size_t i = 0; i < f; ++i) {
         h = hash::f64(h, food_.pos_x[i]);
         h = hash::f64(h, food_.pos_y[i]);
-        h = hash::u8 (h, food_.active[i]);
+        h = hash::f64(h, food_.stock[i]);
+        h = hash::u8 (h, food_.alive[i]);
     }
+    h = hash::f64(h, recolonise_accum_);
     return h;
 }
 
@@ -179,20 +204,24 @@ TraitStats World::trait_stats() const {
             const double a = front_.gene_speed[i];
             const double b = front_.gene_size[i];
             const double c = front_.gene_sense[i];
+            const double d = front_.gene_greed[i];
             p.speed += a; p.speed_sq += a * a;
             p.size  += b; p.size_sq  += b * b;
             p.sense += c; p.sense_sq += c * c;
+            p.greed += d; p.greed_sq += d * d;
             p.energy += front_.energy[i];
         }
         trait_slots_[chunk] = p;
     }, n);
 
-    double s1 = 0.0, s2 = 0.0, z1 = 0.0, z2 = 0.0, e1 = 0.0, e2 = 0.0, en = 0.0;
+    double s1 = 0.0, s2 = 0.0, z1 = 0.0, z2 = 0.0, e1 = 0.0, e2 = 0.0;
+    double g1 = 0.0, g2 = 0.0, en = 0.0;
     for (unsigned c = 0; c < ThreadPool::chunks(); ++c) {   // fixed order
         const TraitPartials& p = trait_slots_[c];
         s1 += p.speed; s2 += p.speed_sq;
         z1 += p.size;  z2 += p.size_sq;
         e1 += p.sense; e2 += p.sense_sq;
+        g1 += p.greed; g2 += p.greed_sq;
         en += p.energy;
     }
     const double inv = 1.0 / static_cast<double>(n);
@@ -204,6 +233,7 @@ TraitStats World::trait_stats() const {
     t.mean_speed = s1 * inv; t.std_speed = sd(s1, s2, inv);
     t.mean_size  = z1 * inv; t.std_size  = sd(z1, z2, inv);
     t.mean_sense = e1 * inv; t.std_sense = sd(e1, e2, inv);
+    t.mean_greed = g1 * inv; t.std_greed = sd(g1, g2, inv);
     t.mean_energy = en * inv;
     return t;
 }
@@ -232,7 +262,7 @@ int32_t World::nearest_food_naive(double x, double y, double radius) const {
     int32_t best_i = -1;
     const size_t n = food_.count();
     for (size_t f = 0; f < n; ++f) {
-        if (!food_.active[f]) continue;
+        if (!food_.alive[f]) continue;
         const double dx = wrap_delta(food_.pos_x[f] - x, cfg_.world.width);
         const double dy = wrap_delta(food_.pos_y[f] - y, cfg_.world.height);
         const double d2 = dx * dx + dy * dy;
@@ -251,6 +281,8 @@ void World::step(double dt) {
     stats_.births = 0;
     stats_.deaths = 0;
     stats_.eaten  = 0;
+    stats_.collapsed = 0;
+    stats_.harvest_total = 0.0;
 
     if (!profiling_) {
         if (!naive_) p1_p3_build_grid();
@@ -258,7 +290,7 @@ void World::step(double dt) {
         p5_resolve_claims();
         p6_mark_deaths();
         p7_compact_and_reproduce();
-        p8_respawn_food();
+        p8_respawn_food(dt);
     } else {
         using Clock = std::chrono::steady_clock;
         auto mark = [](Clock::time_point& prev, double& sink) {
@@ -274,7 +306,7 @@ void World::step(double dt) {
         p5_resolve_claims();        mark(t, phases_.p5_claims);
         p6_mark_deaths();           mark(t, phases_.p6_deaths);
         p7_compact_and_reproduce(); mark(t, phases_.p7_compact);
-        p8_respawn_food();          mark(t, phases_.p8_food);
+        p8_respawn_food(dt);        mark(t, phases_.p8_food);
         phases_.total += std::chrono::duration<double, std::milli>(t - t_begin).count();
     }
 
@@ -296,7 +328,7 @@ double World::max_query_radius() const {
 
 // P1-P3: rebuild the food grid. Cell size tracks the evolving population.
 void World::p1_p3_build_grid() {
-    grid_.build(food_.pos_x.data(), food_.pos_y.data(), food_.active.data(), food_.count(),
+    grid_.build(food_.pos_x.data(), food_.pos_y.data(), food_.alive.data(), food_.count(),
                 cfg_.world.width, cfg_.world.height, max_query_radius(), pool_);
 }
 
@@ -307,7 +339,7 @@ int32_t World::nearest_food_grid(double x, double y, double radius,
     double  best   = r2;
     int32_t best_i = -1;
     for (const uint32_t f : scratch) {
-        if (!food_.active[f]) continue;
+        if (!food_.alive[f]) continue;
         const double dx = wrap_delta(food_.pos_x[f] - x, cfg_.world.width);
         const double dy = wrap_delta(food_.pos_y[f] - y, cfg_.world.height);
         const double d2 = dx * dx + dy * dy;
@@ -418,7 +450,10 @@ void World::p4_agents(double dt) {
         back_.gene_speed[i] = speed;
         back_.gene_size[i]  = size;
         back_.gene_sense[i] = sense;
+        back_.gene_greed[i] = front_.gene_greed[i];
+        back_.lineage[i]    = front_.lineage[i];
         back_.age[i]        = front_.age[i] + 1;
+        back_.cooldown[i]   = front_.cooldown[i] > 0 ? front_.cooldown[i] - 1 : 0;
         back_.alive[i]      = front_.alive[i];
 
         // --- energy drain ---
@@ -428,7 +463,7 @@ void World::p4_agents(double dt) {
         back_.energy[i] = front_.energy[i] - cost * dt;
 
         // --- claim ---
-        if (target >= 0) {
+        if (target >= 0 && back_.cooldown[i] == 0) {
             const double bx = wrap_delta(food_.pos_x[target] - nx, w);
             const double by = wrap_delta(food_.pos_y[target] - ny, h);
             if (bx * bx + by * by <= eat_r * eat_r)
@@ -452,17 +487,45 @@ void World::p5_resolve_claims() {
         return a.agent_idx < b.agent_idx;
     });
 
-    const double gain = cfg_.food.energy_per_food;
-    uint32_t prev_food = 0xFFFFFFFFu;
+    // Each claim is served in (source, agent-index) order, and an agent takes
+    // only what its greed asks for, so several agents can share one source in a
+    // tick and the split is the same every run. The old model handed the whole
+    // item to the lowest index; a renewable stock has to be divisible or greed
+    // would have nothing to be greedy about.
+    const double cap        = cfg_.food.capacity;
+    const double per_unit   = cfg_.food.energy_per_unit;
+
+    const double floor_stock = cfg_.food.collapse_threshold * cap;
+
     for (const Claim& c : all_claims_) {
-        if (c.food_idx == prev_food) continue;   // already awarded, lowest index won
-        prev_food = c.food_idx;
-        if (!food_.active[c.food_idx]) continue;
-        food_.active[c.food_idx] = 0;
-        ++stats_.eaten;
+        const uint32_t f = c.food_idx;
+        if (!food_.alive[f]) continue;          // collapsed earlier in this very tick
+
+        // greed is the FRACTION of what is standing there that the agent takes,
+        // not an absolute amount. That is what makes it a continuous strategy
+        // rather than a cliff: a prudent agent's bite shrinks as the source
+        // shrinks, so it self-limits, while greed near 1.0 strips the source in
+        // a single visit.
         const size_t a = c.agent_idx;
-        back_.energy[a] = std::min(back_.energy[a] + gain, capacity_of(back_.gene_size[a]));
+        const double bite = back_.gene_greed[a] * food_.stock[f];
+        if (bite <= 0.0) continue;
+
+        food_.stock[f] -= bite;
+        stats_.harvest_total += bite;
+        ++stats_.eaten;
+
+        back_.energy[a] = std::min(back_.energy[a] + bite * per_unit,
+                                   capacity_of(back_.gene_size[a]));
+        back_.cooldown[a] = cfg_.food.digest_ticks;
         eaten_[a] = 1;
+
+        // Harvested past the point of recovery: the source is gone for good
+        // unless something recolonises the slot.
+        if (food_.stock[f] < floor_stock) {
+            food_.stock[f] = 0.0;
+            food_.alive[f] = 0;
+            ++stats_.collapsed;
+        }
     }
 }
 
@@ -516,6 +579,8 @@ void World::p7_compact_and_reproduce() {
         const double p_spd  = back_.gene_speed[i];
         const double p_siz  = back_.gene_size[i];
         const double p_sen  = back_.gene_sense[i];
+        const double p_gre  = back_.gene_greed[i];
+        const uint32_t p_lin = back_.lineage[i];
         const double px     = back_.pos_x[i];
         const double py     = back_.pos_y[i];
         back_.energy[i] = half;
@@ -525,32 +590,61 @@ void World::p7_compact_and_reproduce() {
         const double c_spd = genome::mutate(p_spd, genome::kSpeed, sigma, seed_, cid, tick_, 0);
         const double c_siz = genome::mutate(p_siz, genome::kSize,  sigma, seed_, cid, tick_, 2);
         const double c_sen = genome::mutate(p_sen, genome::kSense, sigma, seed_, cid, tick_, 4);
+        const double c_gre = genome::mutate(p_gre, genome::kGreed, sigma, seed_, cid, tick_, 8);
         const double a = kTwoPi * rng::unit(rng::draw(seed_, cid, tick_, rng::Purpose::Mutation, 6));
 
+        // The child is born where the parent stands. That spatial inheritance is
+        // what gives greed a cost: a lineage that strips its patch bare leaves
+        // its own descendants standing in the ruins.
         back_.append(cid, px, py, mathd::dcos(a) * c_spd, mathd::dsin(a) * c_spd, half,
-                     c_spd, c_siz, c_sen, 0);
+                     c_spd, c_siz, c_sen, c_gre, 0, p_lin);
         ++stats_.births;
     }
 }
 
 // P8 (serial): top the food back up to target density. Scanning from index 0
 // every tick keeps slot reuse in a fixed order.
-void World::p8_respawn_food() {
-    size_t active = 0;
-    for (const uint8_t a : food_.active) active += a;
+// P8 (serial): regrow every living source toward capacity, then recolonise as
+// many dead slots as the accumulated rate allows. Recolonisation is the only
+// route back from collapse; set food.recolonise_rate to 0 and the carrying
+// capacity of the world can only ever fall.
+void World::p8_respawn_food(double dt) {
+    const size_t n     = food_.count();
+    const double cap   = cfg_.food.capacity;
+    const double regen = cfg_.food.regen_rate * dt;
 
-    const size_t target = cfg_.food.target_count;
-    uint32_t budget = cfg_.food.spawn_rate;
-    const size_t n = food_.count();
-    for (size_t f = 0; f < n && active < target && budget > 0; ++f) {
-        if (food_.active[f]) continue;
-        food_.pos_x[f]  = rng::range(seed_, f, tick_, rng::Purpose::FoodSpawn, 0, 0.0, cfg_.world.width);
-        food_.pos_y[f]  = rng::range(seed_, f, tick_, rng::Purpose::FoodSpawn, 1, 0.0, cfg_.world.height);
-        food_.active[f] = 1;
-        ++active;
-        --budget;
+    size_t alive = 0;
+    double stock_total = 0.0;
+    for (size_t f = 0; f < n; ++f) {
+        if (!food_.alive[f]) continue;
+        food_.stock[f] = std::min(cap, food_.stock[f] + regen);
+        stock_total += food_.stock[f];
+        ++alive;
     }
-    stats_.food_active = active;
+
+    // Fractional rates accumulate rather than rounding to zero. The accumulator
+    // is part of the hashed state: it decides which tick the next source
+    // returns on.
+    stats_.recolonised = 0;
+    recolonise_accum_ += cfg_.food.recolonise_rate * dt;
+    const size_t target = cfg_.food.target_count;
+    // A recolonised source arrives as a seedling at half capacity -- above the
+    // collapse floor, so it is harvestable, but one greedy bite from gone.
+    const double seedling = 0.5 * cap;
+    for (size_t f = 0; f < n && recolonise_accum_ >= 1.0 && alive < target; ++f) {
+        if (food_.alive[f]) continue;
+        food_.pos_x[f] = rng::range(seed_, f, tick_, rng::Purpose::FoodSpawn, 0, 0.0, cfg_.world.width);
+        food_.pos_y[f] = rng::range(seed_, f, tick_, rng::Purpose::FoodSpawn, 1, 0.0, cfg_.world.height);
+        food_.stock[f] = seedling;
+        food_.alive[f] = 1;
+        recolonise_accum_ -= 1.0;
+        stock_total += seedling;
+        ++alive;
+        ++stats_.recolonised;
+    }
+
+    stats_.food_active = alive;
+    stats_.stock_total = stock_total;
 }
 
 }  // namespace evosim

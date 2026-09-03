@@ -1,3 +1,4 @@
+#include <algorithm>
 #include <chrono>
 #include <cstdio>
 #include <fstream>
@@ -10,6 +11,7 @@
 #include <vector>
 
 #include "evosim/config.hpp"
+#include "evosim/recorder.hpp"
 #include "evosim/telemetry.hpp"
 #include "evosim/thread_pool.hpp"
 #include "evosim/world.hpp"
@@ -23,6 +25,9 @@ struct Options {
     std::string config_path;
     std::string out_path;
     std::string dump_agents_path;
+    std::string record_path;
+    uint64_t    record_frames = 240;
+    uint32_t    record_agents = 1500;
     uint64_t    seed         = 42;
     uint64_t    ticks        = 10000;
     int         threads      = -1;   // -1 = take from config
@@ -44,6 +49,9 @@ void usage() {
         "  --set K=V         override one config key, e.g. --set population.initial_agents=50000\n"
         "  --out PATH        write telemetry CSV here\n"
         "  --dump-agents P   write the final per-agent traits to P as CSV\n"
+        "  --record PATH     record a timeline for the viewer (binary)\n"
+        "  --record-frames N target number of frames in the recording (default 240)\n"
+        "  --record-agents N max agent dots per frame (default 1500)\n"
         "  --headless        run with no renderer and no clock (default)\n"
         "  --naive           use the O(n^2) neighbor path instead of the grid\n"
         "  --bench           report a per-phase timing breakdown instead of telemetry\n"
@@ -81,6 +89,12 @@ bool parse_args(int argc, char** argv, Options& o) {
                                      o.overrides.emplace_back(argv[++i]); }
         else if (a == "--dump-agents") { if (!need_value(argc, i, "--dump-agents")) return false;
                                      o.dump_agents_path = argv[++i]; }
+        else if (a == "--record")  { if (!need_value(argc, i, "--record")) return false;
+                                     o.record_path = argv[++i]; }
+        else if (a == "--record-frames") { if (!need_value(argc, i, "--record-frames")) return false;
+                                     o.record_frames = std::strtoull(argv[++i], nullptr, 10); }
+        else if (a == "--record-agents") { if (!need_value(argc, i, "--record-agents")) return false;
+                                     o.record_agents = static_cast<uint32_t>(std::strtoul(argv[++i], nullptr, 10)); }
         else { std::cerr << "evosim: unknown option '" << a << "'\n"; usage(); return false; }
     }
     return true;
@@ -95,6 +109,7 @@ struct RunResult {
     double   ms_tick = 0.0;
     size_t   population = 0;
     bool     agents_written = false;
+    uint64_t frames_recorded = 0;
 };
 
 // Per-agent traits of the surviving population, for the trait-correlation plot.
@@ -103,14 +118,15 @@ struct RunResult {
 bool dump_agents(const World& world, const std::string& path) {
     std::ofstream f(path, std::ios::out | std::ios::trunc);
     if (!f) return false;
-    f << "id,pos_x,pos_y,energy,speed,size,sense,age\n";
+    f << "id,lineage,pos_x,pos_y,energy,speed,size,sense,greed,age\n";
     const AgentBuffer& a = world.agents();
     char line[256];
     for (size_t i = 0; i < a.count(); ++i) {
         const int n = std::snprintf(line, sizeof(line),
-            "%llu,%.17g,%.17g,%.17g,%.17g,%.17g,%.17g,%u\n",
-            static_cast<unsigned long long>(a.id[i]), a.pos_x[i], a.pos_y[i], a.energy[i],
-            a.gene_speed[i], a.gene_size[i], a.gene_sense[i], a.age[i]);
+            "%llu,%u,%.17g,%.17g,%.17g,%.17g,%.17g,%.17g,%.17g,%u\n",
+            static_cast<unsigned long long>(a.id[i]), a.lineage[i],
+            a.pos_x[i], a.pos_y[i], a.energy[i],
+            a.gene_speed[i], a.gene_size[i], a.gene_sense[i], a.gene_greed[i], a.age[i]);
         if (n > 0) f.write(line, n);
     }
     return static_cast<bool>(f);
@@ -119,21 +135,40 @@ bool dump_agents(const World& world, const std::string& path) {
 // One headless run. No clock, no variable dt, no renderer.
 RunResult run_headless(const Config& cfg, const Options& opt, unsigned threads,
                        TelemetryWriter* csv, bool verbose, const std::string& agent_dump = "") {
+    RunResult r;
     ThreadPool pool(threads);
     World world(cfg, opt.seed, &pool);
     world.set_naive(opt.naive);
     world.set_profiling(opt.bench);
 
+    // One frame every `record_every` ticks, chosen so the recording lands near
+    // the requested frame count whatever the run length.
+    Recorder rec;
+    const uint64_t record_every =
+        opt.record_frames ? std::max<uint64_t>(1, opt.ticks / opt.record_frames) : 1;
+    if (!opt.record_path.empty()) {
+        if (!rec.open(opt.record_path, world, opt.ticks, record_every, opt.record_agents))
+            std::cerr << "evosim: cannot write " << opt.record_path << "\n";
+        else
+            rec.capture(world);          // frame 0: the founding state
+    }
+
     constexpr uint64_t kTelemetryEvery = 100;
-    uint64_t births_acc = 0, deaths_acc = 0;
+    uint64_t births_acc = 0, deaths_acc = 0, collapsed_acc = 0, recolonised_acc = 0;
+    double   harvest_acc = 0.0;
 
     const auto t0 = std::chrono::steady_clock::now();
     auto block_start = t0;
 
     for (uint64_t i = 0; i < opt.ticks; ++i) {
         world.step(DT);
-        births_acc += world.stats().births;
-        deaths_acc += world.stats().deaths;
+        births_acc      += world.stats().births;
+        deaths_acc      += world.stats().deaths;
+        collapsed_acc   += world.stats().collapsed;
+        recolonised_acc += world.stats().recolonised;
+        harvest_acc     += world.stats().harvest_total;
+
+        if (rec.is_open() && world.tick() % record_every == 0) rec.capture(world);
 
         if (world.tick() % kTelemetryEvery != 0) continue;
 
@@ -150,14 +185,20 @@ RunResult run_headless(const Config& cfg, const Options& opt, unsigned threads,
             row.mean_speed  = ts.mean_speed;  row.std_speed = ts.std_speed;
             row.mean_size   = ts.mean_size;   row.std_size  = ts.std_size;
             row.mean_sense  = ts.mean_sense;  row.std_sense = ts.std_sense;
+            row.mean_greed  = ts.mean_greed;  row.std_greed = ts.std_greed;
             row.births      = births_acc;
             row.deaths      = deaths_acc;
+            row.collapsed   = collapsed_acc;
+            row.recolonised = recolonised_acc;
+            row.stock_total = world.stats().stock_total;
+            row.harvest     = harvest_acc;
             row.mean_energy = ts.mean_energy;
             row.ms_per_tick = block_ms / static_cast<double>(kTelemetryEvery);
             row.state_hash  = world.state_hash();
             csv->add(row);
         }
-        births_acc = deaths_acc = 0;
+            births_acc = deaths_acc = collapsed_acc = recolonised_acc = 0;
+            harvest_acc = 0.0;
 
         if (verbose && opt.verify && world.tick() % 1000 == 0) {
             const TraitStats ts = world.trait_stats();
@@ -167,14 +208,19 @@ RunResult run_headless(const Config& cfg, const Options& opt, unsigned threads,
                       << "  speed " << ts.mean_speed
                       << "  size " << ts.mean_size
                       << "  sense " << ts.mean_sense
+                      << "  greed " << ts.mean_greed
+                      << "  stock " << world.stats().stock_total
                       << "  E " << ts.mean_energy
                       << "  hash " << std::hex << world.state_hash() << std::dec << "\n";
         }
     }
     if (csv != nullptr) csv->flush();
+    if (rec.is_open()) {
+        r.frames_recorded = rec.frames();
+        rec.close();
+    }
 
     const double secs = std::chrono::duration<double>(std::chrono::steady_clock::now() - t0).count();
-    RunResult r;
     r.hash       = world.state_hash();
     r.ms_tick    = secs * 1000.0 / static_cast<double>(opt.ticks ? opt.ticks : 1);
     r.population = world.population();
@@ -299,6 +345,9 @@ int main(int argc, char** argv) {
               << "        final population " << r.population << "\n";
     if (!opt.out_path.empty()) std::cout << "        telemetry -> " << opt.out_path << "\n";
     if (r.agents_written) std::cout << "        agents    -> " << opt.dump_agents_path << "\n";
+    if (r.frames_recorded)
+        std::cout << "        recording -> " << opt.record_path << " ("
+                  << r.frames_recorded << " frames)\n";
 
     return 0;
 }

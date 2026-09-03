@@ -45,6 +45,7 @@ add_library(evosim_core
   src/telemetry.cpp
   src/spatial_grid.cpp
   src/thread_pool.cpp
+  src/recorder.cpp
 )
 target_include_directories(evosim_core PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include)
 target_link_libraries(evosim_core PUBLIC Threads::Threads evosim_fp PRIVATE evosim_warnings)
@@ -60,6 +61,12 @@ target_link_libraries(bench_neighbors PRIVATE evosim_core evosim_warnings)
 
 add_executable(bench_scaling bench/bench_scaling.cpp)
 target_link_libraries(bench_scaling PRIVATE evosim_core evosim_warnings)
+
+# ---------------------------------------------------------------------------
+# Experiments
+# ---------------------------------------------------------------------------
+add_executable(evosim_sweep tools/sweep.cpp)
+target_link_libraries(evosim_sweep PRIVATE evosim_core evosim_warnings)
 
 # ---------------------------------------------------------------------------
 # Tests
