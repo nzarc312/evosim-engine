@@ -26,6 +26,10 @@ struct AgentBuffer {
     // Append agent `i` of `src`. Used by the serial compaction in P7, which
     // must preserve relative order.
     void   append_from(const AgentBuffer& src, size_t i);
+    // Append from scalars. Offspring are appended to the buffer being iterated,
+    // so the values must be read out before any push_back can reallocate.
+    void   append(uint64_t id_, double x, double y, double vx, double vy, double e,
+                  double speed, double size, double sense, uint32_t age_);
 };
 
 struct FoodBuffer {
@@ -41,6 +45,16 @@ struct FoodBuffer {
 struct Claim {
     uint32_t food_idx;
     uint32_t agent_idx;
+};
+
+// Population aggregates. Computed with sums and sums-of-squares in one pass:
+// the two-pass form is numerically nicer but needs a second traversal, and this
+// shape is what P9 turns into a fixed-order parallel reduction in M6.
+struct TraitStats {
+    double mean_speed = 0.0, std_speed = 0.0;
+    double mean_size  = 0.0, std_size  = 0.0;
+    double mean_sense = 0.0, std_sense = 0.0;
+    double mean_energy = 0.0;
 };
 
 struct TickStats {
@@ -65,6 +79,7 @@ public:
     const TickStats&   stats() const { return stats_; }
     size_t             population() const { return front_.count(); }
     double             mean_energy() const;
+    TraitStats         trait_stats() const;
 
     // M4 introduces the counting-sort grid; the naive O(n^2) scan stays
     // permanently as the benchmark baseline and the correctness oracle.

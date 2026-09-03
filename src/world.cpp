@@ -57,6 +57,17 @@ void AgentBuffer::append_from(const AgentBuffer& s, size_t i) {
     alive.push_back(s.alive[i]);
 }
 
+void AgentBuffer::append(uint64_t id_, double x, double y, double vx, double vy, double e,
+                         double speed, double size, double sense, uint32_t age_) {
+    id.push_back(id_);
+    pos_x.push_back(x); pos_y.push_back(y);
+    vel_x.push_back(vx); vel_y.push_back(vy);
+    energy.push_back(e);
+    gene_speed.push_back(speed); gene_size.push_back(size); gene_sense.push_back(sense);
+    age.push_back(age_);
+    alive.push_back(1);
+}
+
 void FoodBuffer::resize(size_t n) {
     pos_x.resize(n); pos_y.resize(n); active.resize(n);
 }
@@ -110,6 +121,34 @@ double World::mean_energy() const {
     double s = 0.0;
     for (const double e : front_.energy) s += e;
     return s / static_cast<double>(front_.count());
+}
+
+TraitStats World::trait_stats() const {
+    TraitStats t;
+    const size_t n = front_.count();
+    if (n == 0) return t;
+
+    double s1 = 0.0, s2 = 0.0, z1 = 0.0, z2 = 0.0, e1 = 0.0, e2 = 0.0, en = 0.0;
+    for (size_t i = 0; i < n; ++i) {
+        const double a = front_.gene_speed[i];
+        const double b = front_.gene_size[i];
+        const double c = front_.gene_sense[i];
+        s1 += a; s2 += a * a;
+        z1 += b; z2 += b * b;
+        e1 += c; e2 += c * c;
+        en += front_.energy[i];
+    }
+    const double inv = 1.0 / static_cast<double>(n);
+    auto sd = [](double sum, double sumsq, double invn) {
+        const double m = sum * invn;
+        const double v = sumsq * invn - m * m;
+        return v > 0.0 ? std::sqrt(v) : 0.0;   // clamp the cancellation floor
+    };
+    t.mean_speed = s1 * inv; t.std_speed = sd(s1, s2, inv);
+    t.mean_size  = z1 * inv; t.std_size  = sd(z1, z2, inv);
+    t.mean_sense = e1 * inv; t.std_sense = sd(e1, e2, inv);
+    t.mean_energy = en * inv;
+    return t;
 }
 
 // ---------------------------------------------------------------------------
@@ -308,8 +347,9 @@ void World::p6_mark_deaths() {
         if (back_.energy[i] <= 0.0 || back_.age[i] > max_age) back_.alive[i] = 0;
 }
 
-// P7 (serial): stable compaction. Relative order is preserved on purpose --
-// swap-and-pop would reorder agents and diverge two otherwise identical runs.
+// P7 (serial): stable compaction, then offspring appended in parent-index
+// order. Relative order is preserved on purpose -- swap-and-pop would reorder
+// agents and diverge two otherwise identical runs.
 void World::p7_compact_and_reproduce() {
     const size_t n = back_.count();
     size_t w = 0;
@@ -331,6 +371,38 @@ void World::p7_compact_and_reproduce() {
         ++w;
     }
     back_.resize(w);
+
+    // Reproduction. Parent splits its energy with the child; the child's genome
+    // is the parent's plus a clamped gaussian step. Agent ids come from a
+    // serial counter, so an agent's random stream is stable across the
+    // compaction that keeps renumbering array indices.
+    const double   thr       = cfg_.energy.repro_threshold;
+    const double   sigma     = cfg_.mutation.sigma;
+    const size_t   max_pop   = cfg_.population.max_agents;
+    const size_t   parents_n = w;
+    for (size_t i = 0; i < parents_n; ++i) {
+        if (back_.energy[i] < thr) continue;
+        if (back_.count() >= max_pop) break;
+
+        const double half   = back_.energy[i] * 0.5;
+        const double p_spd  = back_.gene_speed[i];
+        const double p_siz  = back_.gene_size[i];
+        const double p_sen  = back_.gene_sense[i];
+        const double px     = back_.pos_x[i];
+        const double py     = back_.pos_y[i];
+        back_.energy[i] = half;
+
+        const uint64_t cid = next_agent_id_++;
+        // gaussian() consumes sub and sub+1, so traits step by two.
+        const double c_spd = genome::mutate(p_spd, genome::kSpeed, sigma, seed_, cid, tick_, 0);
+        const double c_siz = genome::mutate(p_siz, genome::kSize,  sigma, seed_, cid, tick_, 2);
+        const double c_sen = genome::mutate(p_sen, genome::kSense, sigma, seed_, cid, tick_, 4);
+        const double a = kTwoPi * rng::unit(rng::draw(seed_, cid, tick_, rng::Purpose::Mutation, 6));
+
+        back_.append(cid, px, py, std::cos(a) * c_spd, std::sin(a) * c_spd, half,
+                     c_spd, c_siz, c_sen, 0);
+        ++stats_.births;
+    }
 }
 
 // P8 (serial): top the food back up to target density. Scanning from index 0

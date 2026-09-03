@@ -6,6 +6,7 @@
 #include <string>
 
 #include "evosim/config.hpp"
+#include "evosim/telemetry.hpp"
 #include "evosim/world.hpp"
 
 using namespace evosim;
@@ -93,15 +94,56 @@ int main(int argc, char** argv) {
     World world(cfg, opt.seed);
     world.set_naive(opt.naive);
 
+    TelemetryWriter csv;
+    if (!opt.out_path.empty() && !csv.open(opt.out_path)) {
+        std::cerr << "evosim: cannot write " << opt.out_path << "\n";
+        return 2;
+    }
+
+    constexpr uint64_t kTelemetryEvery = 100;
+    uint64_t births_acc = 0, deaths_acc = 0;
+
     const auto t0 = std::chrono::steady_clock::now();
+    auto block_start = t0;
+
     for (uint64_t i = 0; i < opt.ticks; ++i) {
         world.step(DT);   // headless: no clock, no variable dt
-        if (opt.verify && world.tick() % 1000 == 0)
-            std::cout << "tick " << world.tick() << "  pop " << world.population()
-                      << "  food " << world.stats().food_active
-                      << "  eaten " << world.stats().eaten
-                      << "  mean_energy " << world.mean_energy() << "\n";
+        births_acc += world.stats().births;
+        deaths_acc += world.stats().deaths;
+
+        if (world.tick() % kTelemetryEvery == 0) {
+            const auto now = std::chrono::steady_clock::now();
+            const double block_ms =
+                std::chrono::duration<double, std::milli>(now - block_start).count();
+            block_start = now;
+
+            const TraitStats ts = world.trait_stats();
+            TelemetryRow row;
+            row.tick        = world.tick();
+            row.population  = world.population();
+            row.food_active = world.stats().food_active;
+            row.mean_speed  = ts.mean_speed;  row.std_speed = ts.std_speed;
+            row.mean_size   = ts.mean_size;   row.std_size  = ts.std_size;
+            row.mean_sense  = ts.mean_sense;  row.std_sense = ts.std_sense;
+            row.births      = births_acc;
+            row.deaths      = deaths_acc;
+            row.mean_energy = ts.mean_energy;
+            row.ms_per_tick = block_ms / static_cast<double>(kTelemetryEvery);
+            csv.add(row);
+            births_acc = deaths_acc = 0;
+
+            if (opt.verify && world.tick() % 1000 == 0)
+                std::cout << "tick " << world.tick()
+                          << "  pop " << row.population
+                          << "  food " << row.food_active
+                          << "  speed " << row.mean_speed
+                          << "  size " << row.mean_size
+                          << "  sense " << row.mean_sense
+                          << "  E " << row.mean_energy
+                          << "  " << row.ms_per_tick << " ms/tick\n";
+        }
     }
+    csv.flush();
     const double secs = std::chrono::duration<double>(std::chrono::steady_clock::now() - t0).count();
 
     std::cout << "evosim: " << world.tick() << " ticks in " << secs << " s  ("
@@ -109,5 +151,6 @@ int main(int argc, char** argv) {
               << " ms/tick)\n"
               << "        final population " << world.population()
               << ", food active " << world.stats().food_active << "\n";
+    if (!opt.out_path.empty()) std::cout << "        telemetry -> " << opt.out_path << "\n";
     return 0;
 }
