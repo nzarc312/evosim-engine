@@ -28,10 +28,15 @@ struct Config {
         double   energy_per_food = 25.0;
     } food;
 
+    // Costs are per simulated second and are applied as `energy -= cost * dt`.
+    // The spec's starting values (0.05 / 0.02 / 0.01) are the same numbers read
+    // as per-tick costs; at the 60 Hz timestep that is ~30x too cheap and the
+    // population grows without bound, so they were tuned per section 6.4 until
+    // the population oscillates. See README "Tuning the energy economy".
     struct Energy {
-        double   base_cost       = 0.05;
-        double   move_coef       = 0.02;
-        double   sense_coef      = 0.01;
+        double   base_cost       = 1.00;
+        double   move_coef       = 0.35;
+        double   sense_coef      = 0.15;
         double   repro_threshold = 100.0;
         uint32_t max_age         = 3000;
     } energy;

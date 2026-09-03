@@ -14,7 +14,7 @@ int main() {
         CHECK(c.world.width == 500.0);
         CHECK(c.population.initial_agents == 1000u);
         CHECK(c.food.target_count == 2000u);
-        CHECK(c.energy.base_cost == 0.05);
+        CHECK(c.energy.base_cost == 1.00);
         CHECK(c.energy.max_age == 3000u);
         CHECK(c.mutation.sigma == 0.05);
         CHECK(c.threading.threads == 0u);

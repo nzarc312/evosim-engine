@@ -1,3 +1,4 @@
+#include <chrono>
 #include <cstdint>
 #include <cstdlib>
 #include <cstring>
@@ -90,8 +91,23 @@ int main(int argc, char** argv) {
               << cfg.to_string();
 
     World world(cfg, opt.seed);
-    for (uint64_t i = 0; i < opt.ticks; ++i) world.step(DT);   // no clock at all
+    world.set_naive(opt.naive);
 
-    std::cout << "evosim: completed " << world.tick() << " ticks\n";
+    const auto t0 = std::chrono::steady_clock::now();
+    for (uint64_t i = 0; i < opt.ticks; ++i) {
+        world.step(DT);   // headless: no clock, no variable dt
+        if (opt.verify && world.tick() % 1000 == 0)
+            std::cout << "tick " << world.tick() << "  pop " << world.population()
+                      << "  food " << world.stats().food_active
+                      << "  eaten " << world.stats().eaten
+                      << "  mean_energy " << world.mean_energy() << "\n";
+    }
+    const double secs = std::chrono::duration<double>(std::chrono::steady_clock::now() - t0).count();
+
+    std::cout << "evosim: " << world.tick() << " ticks in " << secs << " s  ("
+              << (secs * 1000.0 / static_cast<double>(opt.ticks ? opt.ticks : 1))
+              << " ms/tick)\n"
+              << "        final population " << world.population()
+              << ", food active " << world.stats().food_active << "\n";
     return 0;
 }

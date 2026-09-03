@@ -41,6 +41,7 @@ endif()
 add_library(evosim_core
   src/rng.cpp
   src/config.cpp
+  src/world.cpp
 )
 target_include_directories(evosim_core PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include)
 target_link_libraries(evosim_core PUBLIC Threads::Threads evosim_fp PRIVATE evosim_warnings)
