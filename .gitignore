@@ -11,3 +11,7 @@ analysis/viewer.html
 # Sampled time series from the sweep: 6.8 MB and fully regenerable with
 # `evosim_sweep`. The 128 KB summary next to it is committed.
 analysis/experiments/sweep_series.csv
+
+# Personal resume tooling: carries contact details and is not part of the
+# engine. Kept locally, never published.
+analysis/build_resume.py
