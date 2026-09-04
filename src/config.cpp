@@ -51,6 +51,8 @@ bool Config::set(const std::string& k, const std::string& raw) {
     if (k == "population.initial_agents") return parse_u32(v, population.initial_agents);
     if (k == "population.max_agents")     return parse_u32(v, population.max_agents);
     if (k == "population.initial_greed")  return parse_double(v, population.initial_greed);
+    if (k == "population.initial_greed_b") return parse_double(v, population.initial_greed_b);
+    if (k == "population.greed_split")    return parse_double(v, population.greed_split);
     if (k == "food.target_count")         return parse_u32(v, food.target_count);
     if (k == "food.spawn_rate")           return parse_u32(v, food.spawn_rate);
     if (k == "food.capacity")            return parse_double(v, food.capacity);
@@ -65,6 +67,7 @@ bool Config::set(const std::string& k, const std::string& raw) {
     if (k == "energy.repro_threshold")    return parse_double(v, energy.repro_threshold);
     if (k == "energy.max_age")            return parse_u32(v, energy.max_age);
     if (k == "mutation.sigma")            return parse_double(v, mutation.sigma);
+    if (k == "mutation.greed_sigma")      return parse_double(v, mutation.greed_sigma);
     if (k == "threading.threads")         return parse_uint(v, threading.threads);
     return false;
 }
@@ -135,7 +138,10 @@ std::string Config::to_string() const {
     std::ostringstream o;
     o << "[world]      width = " << world.width << " ; height = " << world.height << "\n"
       << "[population] initial_agents = " << population.initial_agents
-      << " ; max_agents = " << population.max_agents << "\n"
+      << " ; max_agents = " << population.max_agents
+      << " ; initial_greed = " << population.initial_greed << "\n"
+      << "             initial_greed_b = " << population.initial_greed_b
+      << " ; greed_split = " << population.greed_split << "\n"
       << "[food]       target_count = " << food.target_count
       << " ; spawn_rate = " << food.spawn_rate
       << " ; capacity = " << food.capacity << "\n"
@@ -148,7 +154,8 @@ std::string Config::to_string() const {
       << " ; sense_coef = " << energy.sense_coef << "\n"
       << "             repro_threshold = " << energy.repro_threshold
       << " ; max_age = " << energy.max_age << "\n"
-      << "[mutation]   sigma = " << mutation.sigma << "\n"
+      << "[mutation]   sigma = " << mutation.sigma
+      << " ; greed_sigma = " << mutation.greed_sigma << "\n"
       << "[threading]  threads = " << threading.threads << "\n";
     return o.str();
 }

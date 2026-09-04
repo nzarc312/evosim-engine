@@ -24,6 +24,13 @@ struct Config {
         // a value in [0,1] starts every founder at exactly that greed, which is
         // how the greedy-vs-prudent comparison is set up.
         double   initial_greed  = -1.0;
+        // Second founder group, for putting two strategies in one world and
+        // letting them compete. When >= 0, the first `greed_split` fraction of
+        // founders get `initial_greed` and the rest get this. Assignment is by
+        // agent index and founder positions are random, so the two groups start
+        // spatially interleaved rather than as separated territories.
+        double   initial_greed_b = -1.0;
+        double   greed_split     = 0.5;
     } population;
 
     // Food is a renewable resource, not a pickup. Each source holds a stock of
@@ -62,6 +69,13 @@ struct Config {
 
     struct Mutation {
         double sigma = 0.05;
+        // Drift rate for greed specifically. Negative means "use sigma". Broken
+        // out because greed sits on a sharp fitness cliff while the other three
+        // traits have broad optima, so the drift rate that lets speed explore
+        // is not necessarily the one that lets greed.
+        double greed_sigma = -1.0;
+
+        double greed() const { return greed_sigma < 0.0 ? sigma : greed_sigma; }
     } mutation;
 
     struct Threading {

@@ -139,6 +139,19 @@ def detect_events(t, source_slots):
                 f"the collapse.")
             below = False
 
+    # --- the turning point: greed peaks, then gives up ground ---
+    # Only counts as a reversal if greed later falls well below the peak, so a
+    # noisy wobble at the top of the run does not earn a marker.
+    live = [i for i in range(n) if pop[i] > 0]
+    if live:
+        pk = max(live, key=lambda k: greed[k])
+        after = [greed[i] for i in live if i > pk]
+        if after and greed[pk] - min(after) > 0.15 and tick[pk] > 200:
+            add(pk, "reversal", "Greed peaks, then loses",
+                f"Mean greed tops out at {greed[pk]:.2f} and falls to "
+                f"{min(after):.2f} after this point: the greedy strategy has won "
+                f"the scramble and is now dying with the resource it stripped.")
+
     # --- greed crossing the measured sustainability cliff ---
     # 0.17 is where the founder-greed sweep flips from sustained to collapsed;
     # see analysis/experiments/sweep_summary.csv.
@@ -194,6 +207,7 @@ def main():
     ap.add_argument("--out", required=True)
     ap.add_argument("--title", default="")
     ap.add_argument("--caption", default="")
+    ap.add_argument("--standfirst", default="")
     args = ap.parse_args()
 
     runs, blobs, base = [], [], 0
@@ -210,7 +224,7 @@ def main():
         runs.append(run)
         blobs.append(frames)
 
-    payload = dict(runs=runs, caption=args.caption)
+    payload = dict(runs=runs, caption=args.caption, standfirst=args.standfirst)
     combined = b"".join(blobs)
 
     with open(args.template) as f:

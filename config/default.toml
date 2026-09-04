@@ -2,7 +2,10 @@
 # initial_greed: -1 draws founders uniformly across the greed range; a value in
 # [0,1] starts every founder at exactly that greed. 0.15 sustains this world
 # indefinitely; 0.25 collapses it. See README "Greedy vs prudent".
+# initial_greed_b >= 0 puts a second founder group in the same world, so two
+# strategies compete directly; greed_split is the fraction in the first group.
 [population] initial_agents = 1000 ; max_agents = 500000 ; initial_greed = -1
+             initial_greed_b = -1 ; greed_split = 0.5
 # Food sources are renewable. Each holds a stock that regrows toward capacity;
 # harvesting it below collapse_threshold * capacity kills it permanently, and
 # only recolonise_rate ever brings a dead slot back. Set recolonise_rate = 0 for
@@ -18,5 +21,5 @@
 #   cost = base_cost + move_coef * speed^2 * size^3 + sense_coef * sense_radius
 [energy]     base_cost = 1.00 ; move_coef = 0.35 ; sense_coef = 0.15
              repro_threshold = 100.0 ; max_age = 3000
-[mutation]   sigma = 0.05
+[mutation]   sigma = 0.05 ; greed_sigma = -1   # -1 = use sigma
 [threading]  threads = 0        # 0 = hardware_concurrency

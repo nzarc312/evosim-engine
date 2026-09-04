@@ -340,7 +340,7 @@ stock an agent takes per visit. Greed has no metabolic cost — its only cost is
 ecological, and it falls partly on the lineage that caused it, because offspring
 are born where the parent stood.
 
-A sweep of 945 runs (315 configurations × 3 seeds) finds a **sharp
+A sweep of 1,005 runs (335 configurations × 3 seeds) finds a **sharp
 sustainability cliff between greed 0.15 and 0.20**:
 
 | founder greed | survives a closed commons (no external replenishment) |
@@ -354,7 +354,14 @@ never loses a single source. Above it, survival is bought entirely by restocking
 the world from outside, and the exact greed value stops mattering — 0.20 fails
 the same way 1.00 does.
 
-Two results I did not expect, both in
+**Put the two strategies in one world and prudence wins every time** — 60 of 60
+head-to-head runs, even when prudent founders start as only 10% of the
+population. The order of events is the point: greed genuinely wins the first
+~700 ticks, out-reproducing prudent lineages and booming the population to
+1,641, and then the resource it stripped fails underneath it. By tick 3,000 the
+greedy lineages are extinct and mean greed sits at 0.12.
+
+Three more results, all in
 [`analysis/experiments/FINDINGS.md`](analysis/experiments/FINDINGS.md):
 
 - **Prudence is inherited, never reached.** A population that starts below the
@@ -366,16 +373,24 @@ Two results I did not expect, both in
   inherits the patch it ruined, should select against greed. It doesn't: drift is
   +0.198, +0.275 and +0.201 at 1×, 2× and 4×. A single-seed pass appeared to show
   the effect I expected, and replication erased it.
+- **Winning costs the winners.** A crash from 1,641 agents to a few dozen is a
+  severe bottleneck, so the prudent survivors are a small, arbitrary sample. They
+  inherit a world that heals completely and still sit at a fraction of the
+  population a never-crashed prudent run sustains.
 
 ### The timeline viewer
 
 [**Open the interactive timeline →**](https://claude.ai/code/artifact/fa9988c9-9e23-4d47-b701-2dc5740358b7)
 
-Three runs identical in every parameter except founder greed — 0.12, 0.50, 0.90.
-Scrub or step through 30,000 ticks, colour agents by greed (red greedy, blue
-prudent) or by founding lineage, and jump between automatically detected pivotal
-moments: population booms and crashes, the resource passing half and
-three-quarters destroyed, extinction, and recovery.
+Four runs side by side, sharing one cursor so scrubbing compares the same tick
+across all of them: three pure strategies (founder greed 0.12, 0.50, 0.90) plus
+the head-to-head, where half the founders start prudent and half greedy in one
+world. Agents are coloured by greed — blue prudent, red greedy — so in the
+head-to-head you watch the red dots take over and then vanish.
+
+Step or scrub through 30,000 ticks and jump between automatically detected
+pivotal moments: booms and crashes, the resource passing half and three-quarters
+destroyed, greed peaking and reversing, extinction, and recovery.
 
 ```bash
 ./build/evosim --seed 42 --ticks 30000 --set population.initial_greed=0.5 \

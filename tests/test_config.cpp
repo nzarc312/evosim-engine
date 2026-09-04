@@ -93,9 +93,21 @@ int main() {
         Config a;
         a.world.height = 321.5;
         a.energy.move_coef = 0.031;
+        a.population.initial_greed   = 0.12;
+        a.population.initial_greed_b = 0.9;
+        a.population.greed_split     = 0.25;
+        a.mutation.greed_sigma       = 0.2;
+        a.food.regen_rate            = 4.5;
         const Config b = Config::from_string(a.to_string(), "<roundtrip>");
         CHECK(b.world.height == 321.5);
         CHECK(b.energy.move_coef == 0.031);
+        // to_string() has to emit every key it can parse, or a round trip
+        // silently reverts whatever it forgot.
+        CHECK(b.population.initial_greed == 0.12);
+        CHECK(b.population.initial_greed_b == 0.9);
+        CHECK(b.population.greed_split == 0.25);
+        CHECK(b.mutation.greed_sigma == 0.2);
+        CHECK(b.food.regen_rate == 4.5);
     }
 
     return evosim::test::finish("test_config");

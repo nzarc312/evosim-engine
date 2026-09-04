@@ -114,9 +114,17 @@ void World::seed_population() {
         front_.gene_speed[i] = genome::seed_trait(genome::kSpeed, seed_, id, 2);
         front_.gene_size[i]  = genome::seed_trait(genome::kSize,  seed_, id, 3);
         front_.gene_sense[i] = genome::seed_trait(genome::kSense, seed_, id, 4);
-        front_.gene_greed[i] = cfg_.population.initial_greed < 0.0
-                                   ? genome::seed_trait(genome::kGreed, seed_, id, 6)
-                                   : genome::kGreed.clamp(cfg_.population.initial_greed);
+        // Founder greed: uniform, a single value, or two groups competing.
+        if (cfg_.population.initial_greed < 0.0) {
+            front_.gene_greed[i] = genome::seed_trait(genome::kGreed, seed_, id, 6);
+        } else if (cfg_.population.initial_greed_b >= 0.0) {
+            const double split = static_cast<double>(n) * cfg_.population.greed_split;
+            front_.gene_greed[i] = genome::kGreed.clamp(
+                static_cast<double>(i) < split ? cfg_.population.initial_greed
+                                               : cfg_.population.initial_greed_b);
+        } else {
+            front_.gene_greed[i] = genome::kGreed.clamp(cfg_.population.initial_greed);
+        }
         // Founders each start their own lineage; descendants inherit it
         // unchanged, so a lineage is a family tree, not a trait class.
         front_.lineage[i]    = static_cast<uint32_t>(i);
@@ -568,7 +576,8 @@ void World::p7_compact_and_reproduce() {
     // serial counter, so an agent's random stream is stable across the
     // compaction that keeps renumbering array indices.
     const double   thr       = cfg_.energy.repro_threshold;
-    const double   sigma     = cfg_.mutation.sigma;
+    const double   sigma       = cfg_.mutation.sigma;
+    const double   greed_sigma = cfg_.mutation.greed();
     const size_t   max_pop   = cfg_.population.max_agents;
     const size_t   parents_n = w;
     for (size_t i = 0; i < parents_n; ++i) {
@@ -590,7 +599,7 @@ void World::p7_compact_and_reproduce() {
         const double c_spd = genome::mutate(p_spd, genome::kSpeed, sigma, seed_, cid, tick_, 0);
         const double c_siz = genome::mutate(p_siz, genome::kSize,  sigma, seed_, cid, tick_, 2);
         const double c_sen = genome::mutate(p_sen, genome::kSense, sigma, seed_, cid, tick_, 4);
-        const double c_gre = genome::mutate(p_gre, genome::kGreed, sigma, seed_, cid, tick_, 8);
+        const double c_gre = genome::mutate(p_gre, genome::kGreed, greed_sigma, seed_, cid, tick_, 8);
         const double a = kTwoPi * rng::unit(rng::draw(seed_, cid, tick_, rng::Purpose::Mutation, 6));
 
         // The child is born where the parent stands. That spatial inheritance is

@@ -31,6 +31,8 @@ struct Spec {
     double      collapse;
     double      recolonise;
     int         world_scale;
+    double      greed_b     = -1.0;   // second founder group; <0 = single group
+    double      greed_split = 0.5;    // fraction of founders in the first group
 };
 
 struct Sample {
@@ -64,7 +66,9 @@ Config config_for(const Spec& s) {
     // than any of these configurations should reach, and several sweeps run
     // concurrently.
     c.population.max_agents     = static_cast<uint32_t>(50000.0 * k * k);
-    c.population.initial_greed  = s.initial_greed;
+    c.population.initial_greed   = s.initial_greed;
+    c.population.initial_greed_b = s.greed_b;
+    c.population.greed_split     = s.greed_split;
     c.food.target_count         = static_cast<uint32_t>(2000.0 * k * k);
     c.food.energy_per_unit      = 3.0;
     c.food.regen_rate           = s.regen;
@@ -131,6 +135,14 @@ std::vector<Spec> build_grid(const std::string& which) {
                 for (const double coll : {0.05, 0.10, 0.20})
                     for (const double rec : {0.0, 2.0, 10.0, 50.0})
                         out.push_back({"economy", 0, g, regen, coll, rec, 1});
+    }
+    if (which == "competition" || which == "all") {
+        // Two strategies in one world. The pure-strategy grids say which greed
+        // levels are viable alone; this asks which one wins when they meet.
+        for (const double split : {0.10, 0.25, 0.50, 0.75, 0.90})
+            for (const double gb : {0.50, 0.90})
+                for (const double rec : {2.0, 10.0})
+                    out.push_back({"competition", 0, 0.12, 3.0, 0.10, rec, 1, gb, split});
     }
     if (which == "critical" || which == "all") {
         // The economy grid showed recolonisation as a step function: 0 is
@@ -224,7 +236,7 @@ int main(int argc, char** argv) {
     for (std::thread& t : workers) t.join();
 
     std::fprintf(fs, "config,grid,seed,initial_greed,regen_rate,collapse_threshold,recolonise_rate,"
-                     "world_scale,initial_agents,source_slots,verdict,extinct_tick,final_pop,"
+                     "world_scale,greed_b,greed_split,initial_agents,source_slots,verdict,extinct_tick,final_pop,"
                      "min_pop,max_pop,final_sources,min_sources,greed_start,greed_end,greed_delta,"
                      "total_harvest,total_collapsed,state_hash\n");
     std::fprintf(fr, "config,grid,seed,initial_greed,regen_rate,collapse_threshold,recolonise_rate,"
@@ -234,10 +246,11 @@ int main(int argc, char** argv) {
         const Outcome& o = results[i];
         const Config c = config_for(o.spec);
         std::fprintf(fs,
-            "%zu,%s,%llu,%.4g,%.4g,%.4g,%.4g,%d,%u,%u,%s,%llu,%llu,%llu,%llu,%llu,%llu,"
+            "%zu,%s,%llu,%.4g,%.4g,%.4g,%.4g,%d,%.4g,%.4g,%u,%u,%s,%llu,%llu,%llu,%llu,%llu,%llu,"
             "%.6f,%.6f,%.6f,%.6f,%llu,%016llx\n",
             i, o.spec.grid.c_str(), (unsigned long long)o.spec.seed, o.spec.initial_greed, o.spec.regen, o.spec.collapse,
-            o.spec.recolonise, o.spec.world_scale, c.population.initial_agents,
+            o.spec.recolonise, o.spec.world_scale, o.spec.greed_b, o.spec.greed_split,
+            c.population.initial_agents,
             c.food.target_count, o.verdict,
             (unsigned long long)o.extinct_tick, (unsigned long long)o.final_pop,
             (unsigned long long)o.min_pop, (unsigned long long)o.max_pop,
