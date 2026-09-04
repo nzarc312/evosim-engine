@@ -12,11 +12,25 @@ ROOT = pathlib.Path(__file__).resolve().parents[2]
 bench = (ROOT / "analysis/experiments/bench_results.txt").read_text()
 
 def section(title_re, text=bench):
-    """Return one '### ...' section, without its heading line."""
-    m = re.search(r"^### .*?" + title_re + r".*?$(.*?)(?=^### |\Z)", text, re.M | re.S)
-    if not m:
-        sys.exit(f"could not find section matching {title_re!r}")
-    return m.group(1).strip("\n")
+    """Return one '### ...' block, without its heading line.
+
+    Line-based on purpose: the regex version of this backtracked its way past
+    the heading and returned three newlines for the last section in the file.
+    """
+    pat = re.compile(title_re)
+    lines = text.splitlines()
+    start = None
+    for i, line in enumerate(lines):
+        if not line.startswith("### "):
+            continue
+        if start is not None:
+            return "\n".join(lines[start:i]).strip("\n")
+        if pat.search(line[4:]):
+            start = i + 1
+    if start is not None:
+        return "\n".join(lines[start:]).strip("\n")
+    sys.exit(f"could not find a '### ' section matching {title_re!r}")
+
 
 def table_rows(sec):
     return [l for l in sec.splitlines() if l.startswith("|") and not l.startswith("|-")][1:]
@@ -29,6 +43,7 @@ scaling50  = section(r"Threading scale-up: 50000")
 serial     = section(r"Measured serial fraction")
 neighbours = section(r"Neighbour search")
 layout     = section(r"Memory layout")
+ceiling    = section(r"Agents sustainable at 60 Hz")
 sharing    = section(r"False sharing")
 
 # Numbers quoted in prose, pulled from the tables so they cannot drift.
@@ -44,6 +59,10 @@ sixty = re.search(r"naive ([\d]+), grid ([\d]+)", neighbours)
 neighbours = re.sub(r"\n\*\*Agents sustainable.*", "", neighbours, flags=re.S).rstrip()
 lrows = table_rows(layout)
 soa_best = num(lrows[-1], 5)
+m = re.search(r"60 Hz ceiling: ([\d.]+) agents on 1 thread, ([\d.]+) agents on (\d+) threads "
+              r"\(([\d.]+)x", bench)
+ceil_1, ceil_n, ceil_t, ceil_r = m.group(1), m.group(2), m.group(3), m.group(4)
+
 fsrows = table_rows(sharing)
 fs_ratios = [float(num(r, 4).rstrip("x")) for r in fsrows]
 fs_lo, fs_hi = f"{min(fs_ratios):.2f}", f"{max(fs_ratios):.2f}"
@@ -63,6 +82,8 @@ vals = dict(sp16=sp16, ms1=ms1, ms16=ms16,
             grid_speedup=f"{best_speedup:.0f}",
             naive60=f"{int(sixty.group(1)):,}", grid60=f"{int(sixty.group(2)):,}",
             soa=soa_best, soa_50k=soa_50k, fs_lo=fs_lo, fs_hi=fs_hi,
+            ceiling_tbl=ceiling, ceil_1=f"{int(float(ceil_1)):,}",
+            ceil_n=f"{int(float(ceil_n)):,}", ceil_t=ceil_t, ceil_r=ceil_r,
             eff2=eff2, eff4=eff4, eff8=eff8, eff16=eff16,
             p2_share=p2_share, p7_share=p7_share, p4_speedup=p4_speedup,
             scaling200=scaling200, scaling50=scaling50, serial_tbl=serial,

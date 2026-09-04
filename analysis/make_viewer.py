@@ -14,6 +14,8 @@ import base64
 import csv
 import json
 import os
+import pathlib
+import re
 import struct
 import sys
 
@@ -232,6 +234,84 @@ def detect_events(t, source_slots):
     return sorted(kept, key=lambda e: e["tick"])
 
 
+def parse_bench(path):
+    """Pull the benchmark output apart into sections, tables and headline numbers.
+
+    The viewer renders whatever is here, so the performance panel and the
+    README quote the same measured output and cannot drift apart.
+    """
+    text = pathlib.Path(path).read_text()
+    sections, cur = [], None
+    for line in text.splitlines():
+        if line.startswith("### "):
+            cur = dict(title=line[4:].strip(), prose=[], tables=[])
+            sections.append(cur)
+            continue
+        if cur is None:
+            continue
+        if line.startswith("|"):
+            cells = [c.strip() for c in line.strip().strip("|").split("|")]
+            if all(set(c) <= set("-: ") for c in cells) and cells:
+                continue                      # separator row
+            if cur["tables"] and cur["tables"][-1]["open"]:
+                cur["tables"][-1]["rows"].append(cells)
+            else:
+                cur["tables"].append(dict(headers=cells, rows=[], open=True))
+        else:
+            if cur["tables"]:
+                cur["tables"][-1]["open"] = False
+            if line.strip():
+                cur["prose"].append(line.strip())
+    for sec in sections:
+        for t in sec["tables"]:
+            t.pop("open", None)
+
+    def find(frag):
+        for sec in sections:
+            if frag.lower() in sec["title"].lower():
+                return sec
+        return None
+
+    head = {}
+    m = re.search(r"60 Hz ceiling: ([\d.]+) agents on 1 thread, ([\d.]+) agents on (\d+) threads "
+                  r"\(([\d.]+)x", text)
+    if m:
+        head.update(ceiling_1=int(float(m.group(1))), ceiling_n=int(float(m.group(2))),
+                    ceiling_threads=int(m.group(3)), ceiling_ratio=float(m.group(4)))
+    m = re.search(r"Serial fraction at 1 thread: \*\*([\d.]+)%\*\* \(Amdahl ceiling ([\d.]+)x\)", text)
+    if m:
+        head.update(serial_1=float(m.group(1)), amdahl=float(m.group(2)))
+    m = re.search(r"Serial fraction at 16 threads: \*\*([\d.]+)%\*\*", text)
+    if m:
+        head.update(serial_16=float(m.group(1)))
+
+    # speedup curves, straight from the scale-up tables
+    curves = []
+    for sec in sections:
+        m = re.search(r"Threading scale-up:\s*(\d+)\s*agents", sec["title"])
+        if m and sec["tables"]:
+            t = sec["tables"][0]
+            curves.append(dict(
+                agents=int(m.group(1)),
+                threads=[int(r[0]) for r in t["rows"]],
+                ms=[float(r[1]) for r in t["rows"]],
+                speedup=[float(r[2].rstrip("x")) for r in t["rows"]],
+                hashes=sorted({r[4] for r in t["rows"]}) if len(t["rows"][0]) > 4 else []))
+    if curves:
+        big = max(curves, key=lambda c: c["agents"])
+        head.update(top_speedup=big["speedup"][-1], top_agents=big["agents"],
+                    top_ms1=big["ms"][0], top_ms16=big["ms"][-1],
+                    one_hash=len(big["hashes"]) == 1)
+
+    nb = find("Neighbour search")
+    if nb and nb["tables"]:
+        sp = [float(r[5].rstrip("x")) for r in nb["tables"][0]["rows"] if r[5] not in ("-", "")]
+        if sp:
+            head["grid_speedup"] = max(sp)
+
+    return dict(sections=sections, head=head, curves=curves)
+
+
 def build_run(label, blurb, record_path, telemetry_path):
     meta, frames = read_record(record_path)
     tel = read_telemetry(telemetry_path)
@@ -261,6 +341,7 @@ def main():
     ap.add_argument("--title", default="")
     ap.add_argument("--caption", default="")
     ap.add_argument("--standfirst", default="")
+    ap.add_argument("--bench", default="")
     args = ap.parse_args()
 
     runs, blobs, base = [], [], 0
@@ -277,7 +358,8 @@ def main():
         runs.append(run)
         blobs.append(frames)
 
-    payload = dict(runs=runs, caption=args.caption, standfirst=args.standfirst)
+    payload = dict(runs=runs, caption=args.caption, standfirst=args.standfirst,
+                   perf=parse_bench(args.bench) if args.bench else None)
     combined = b"".join(blobs)
 
     with open(args.template) as f:

@@ -218,6 +218,46 @@
   .sandchart { display: block; width: 100%; height: 64px; border-radius: 2px; }
   .sandnote { margin: 0; font-size: 11.5px; color: var(--faint); }
 
+  /* ---------- performance ---------- */
+  .perf { margin-top: 14px; }
+  .tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; margin-bottom: 10px; }
+  .tile { background: var(--sunken); border-radius: 3px; padding: 9px 11px; }
+  .tile .num {
+    font-family: "IBM Plex Mono", monospace; font-size: 23px; font-weight: 600;
+    letter-spacing: -0.02em; font-variant-numeric: tabular-nums; line-height: 1.1;
+  }
+  .tile .cap {
+    font-family: "IBM Plex Sans Condensed", sans-serif; font-size: 10px; font-weight: 600;
+    letter-spacing: .08em; text-transform: uppercase; color: var(--faint); margin-top: 3px;
+  }
+  .claim {
+    margin: 0 0 12px; padding: 7px 11px; border-left: 2px solid var(--ev-boom);
+    background: var(--sunken); border-radius: 0 3px 3px 0; font-size: 13px;
+  }
+  .claim b { font-family: "IBM Plex Sans Condensed", sans-serif; }
+  .perftabs { display: inline-flex; margin-bottom: 10px; flex-wrap: wrap; }
+  .perfbody { display: grid; gap: 14px; }
+  .perfsec h3 {
+    font-family: "IBM Plex Sans Condensed", sans-serif; font-size: 13px; font-weight: 700;
+    margin: 0 0 5px;
+  }
+  .perfsec p { margin: 0 0 7px; font-size: 12.5px; color: var(--muted); max-width: 80ch; }
+  .tablewrap { overflow-x: auto; }
+  .perfsec table { border-collapse: collapse; font-size: 12.5px; min-width: 100%; }
+  .perfsec th, .perfsec td {
+    padding: 4px 10px 4px 0; text-align: right; white-space: nowrap;
+    border-bottom: 1px solid var(--hairline);
+  }
+  .perfsec th:first-child, .perfsec td:first-child { text-align: left; }
+  .perfsec th {
+    font-family: "IBM Plex Sans Condensed", sans-serif; font-size: 10px; font-weight: 600;
+    letter-spacing: .07em; text-transform: uppercase; color: var(--faint);
+  }
+  .perfsec td { font-family: "IBM Plex Mono", monospace; font-variant-numeric: tabular-nums; }
+  .perfsec td:first-child { font-family: "IBM Plex Sans", sans-serif; }
+  .perfsec code { font-family: "IBM Plex Mono", monospace; font-size: 11.5px; }
+  .speedchart { display: block; width: 100%; max-width: 520px; height: 190px; }
+
   /* ---------- timeline ---------- */
   .tlbox { background: var(--surface); border: 1px solid var(--hairline); border-radius: 3px; padding: 9px 12px 11px; }
   .tlhead { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; margin-bottom: 6px; }
@@ -350,27 +390,27 @@
 
       <div class="sandctl">
         <div class="ctlgrid">
-          <label class="ctl">
+          <label class="ctl" title="How many agents the world starts with. Each founds its own lineage, so this is also the founding family count. More agents means more harvest pressure from tick zero.">
             <span class="ctlname">Founding agents <b id="v-agents">1000</b></span>
             <input type="range" id="s-agents" min="100" max="3000" step="50" value="1000">
           </label>
-          <label class="ctl">
+          <label class="ctl" title="The fraction of a food source's standing stock each founder takes per visit. At or below ~0.15 the population sustains itself with no outside help; at 0.20 and above it cannot. Offspring inherit this with a small random step, so it drifts.">
             <span class="ctlname">Founder greed <b id="v-greed">0.50</b></span>
             <input type="range" id="s-greed" min="0.05" max="1" step="0.01" value="0.5">
           </label>
-          <label class="ctl">
+          <label class="ctl" title="How many renewable food sources exist in the 500x500 world. Each holds a stock that regrows toward capacity 25; harvest it below 10% of that and it dies permanently.">
             <span class="ctlname">Food sources <b id="v-food">2000</b></span>
             <input type="range" id="s-food" min="200" max="4000" step="100" value="2000">
           </label>
-          <label class="ctl">
+          <label class="ctl" title="How fast a living source regrows, in stock per second. Raise it and the commons tolerates heavier harvesting; drop it to 0 and every source is a one-off.">
             <span class="ctlname">Regrowth /sec <b id="v-regen">3.0</b></span>
             <input type="range" id="s-regen" min="0" max="8" step="0.25" value="3">
           </label>
-          <label class="ctl">
+          <label class="ctl" title="How many dead sources are replaced per second from outside the system. Set it to 0 for a closed commons, where every collapse is permanent and only prudent founders survive.">
             <span class="ctlname">Recolonise /sec <b id="v-recol">10</b></span>
             <input type="range" id="s-recol" min="0" max="40" step="1" value="10">
           </label>
-          <label class="ctl">
+          <label class="ctl" title="Initialises every random draw: starting positions, traits and mutations. The same seed and sliders reproduce exactly the same run.">
             <span class="ctlname">Seed <b id="v-seed">42</b></span>
             <input type="range" id="s-seed" min="1" max="9999" step="1" value="42">
           </label>
@@ -403,6 +443,19 @@
         <p class="sandnote" id="sb-note"></p>
       </div>
     </div>
+  </section>
+
+  <section class="tlbox perf" id="perf">
+    <div class="tlhead">
+      <h2>Engine performance</h2>
+      <span class="hint">Apple M5 Pro &middot; 6 performance + 12 efficiency cores &middot; clang 21, -O3</span>
+    </div>
+
+    <div class="tiles" id="perftiles"></div>
+    <p class="claim" id="perfclaim"></p>
+
+    <div class="segbar perftabs" id="perftabs" role="group" aria-label="Performance view"></div>
+    <div class="perfbody" id="perfbody"></div>
   </section>
 
   <p class="footnote" id="footnote"></p>
@@ -1411,6 +1464,141 @@
   document.getElementById("sb-dice").addEventListener("click", function () {
     document.getElementById("s-seed").value = String(1 + Math.floor(Math.random() * 9999));
     sbReset();
+
+  // ---- performance panel ----
+  // Everything here is rendered from the committed benchmark output, so the
+  // panel and the README quote the same measured numbers and cannot drift.
+  var PERF = P.perf;
+  if (PERF) (function () {
+    function esc(t) { return t.replace(/&/g, "&amp;").replace(/</g, "&lt;"); }
+    function md(t) {
+      return esc(t).replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>")
+                   .replace(/`(.+?)`/g, "<code>$1</code>");
+    }
+    function fmt(n) { return Math.round(n).toLocaleString(); }
+    var H = PERF.head;
+
+    var tiles = [
+      [H.top_speedup ? H.top_speedup.toFixed(2) + "x" : "—",
+       "speedup at 16 threads, " + fmt(H.top_agents || 0) + " agents"],
+      [H.ceiling_n ? fmt(H.ceiling_n) : "—", "agents at 60 Hz, 16 threads"],
+      [H.ceiling_1 ? fmt(H.ceiling_1) : "—", "agents at 60 Hz, 1 thread"],
+      [H.serial_1 !== undefined ? H.serial_1.toFixed(1) + "%" : "—", "measured serial fraction"],
+      [H.grid_speedup ? fmt(H.grid_speedup) + "x" : "—", "grid vs naive neighbour search"]
+    ];
+    document.getElementById("perftiles").innerHTML = tiles.map(function (t) {
+      return '<div class="tile"><div class="num">' + t[0] + '</div><div class="cap">' + t[1] + "</div></div>";
+    }).join("");
+
+    document.getElementById("perfclaim").innerHTML = H.one_hash
+      ? "<b>Every thread count in the table below produced the same 64-bit state hash.</b> " +
+        "The speedup costs nothing in reproducibility: 1 thread and 16 threads agree bit for bit."
+      : "State hashes differed across thread counts.";
+
+    var TABS = [
+      ["Threading", ["Threading scale-up"]],
+      ["60 Hz ceiling", ["Agents sustainable"]],
+      ["Serial fraction", ["Measured serial fraction"]],
+      ["Neighbour search", ["Neighbour search"]],
+      ["Memory", ["Memory layout", "False sharing"]]
+    ];
+
+    function renderTable(t) {
+      var h = "<div class=\"tablewrap\"><table><thead><tr>" +
+              t.headers.map(function (c) { return "<th>" + md(c) + "</th>"; }).join("") +
+              "</tr></thead><tbody>";
+      t.rows.forEach(function (r) {
+        h += "<tr>" + r.map(function (c) { return "<td>" + md(c) + "</td>"; }).join("") + "</tr>";
+      });
+      return h + "</tbody></table></div>";
+    }
+
+    function drawSpeedup(cv) {
+      var box = cv.getBoundingClientRect();
+      var dpr = Math.min(window.devicePixelRatio || 1, 2);
+      var W = Math.max(1, Math.round((box.width || 480) * dpr));
+      var Hh = Math.max(1, Math.round(190 * dpr));
+      if (cv.width !== W || cv.height !== Hh) { cv.width = W; cv.height = Hh; }
+      var g = cv.getContext("2d");
+      g.clearRect(0, 0, W, Hh);
+
+      var pad = { l: 34 * dpr, r: 8 * dpr, t: 8 * dpr, b: 22 * dpr };
+      var maxT = 16, maxS = 16;
+      var x = function (t) { return pad.l + (Math.log2(t) / Math.log2(maxT)) * (W - pad.l - pad.r); };
+      var y = function (v) { return Hh - pad.b - (v / maxS) * (Hh - pad.t - pad.b); };
+
+      // ideal
+      g.strokeStyle = PAL.hair; g.lineWidth = 1 * dpr; g.setLineDash([4 * dpr, 3 * dpr]);
+      g.beginPath(); g.moveTo(x(1), y(1)); g.lineTo(x(maxT), y(maxT)); g.stroke();
+      g.setLineDash([]);
+
+      // axes labels
+      g.font = (9.5 * dpr) + "px 'IBM Plex Mono', monospace";
+      g.fillStyle = PAL.faint;
+      [1, 2, 4, 8, 16].forEach(function (t) {
+        g.textAlign = "center"; g.textBaseline = "top";
+        g.fillText(String(t), x(t), Hh - pad.b + 4 * dpr);
+      });
+      [4, 8, 12, 16].forEach(function (v) {
+        g.textAlign = "right"; g.textBaseline = "middle";
+        g.fillText(v + "x", pad.l - 5 * dpr, y(v));
+        g.strokeStyle = PAL.hair; g.lineWidth = 1 * dpr;
+        g.beginPath(); g.moveTo(pad.l, y(v)); g.lineTo(W - pad.r, y(v)); g.stroke();
+      });
+      g.textAlign = "left"; g.textBaseline = "top";
+      g.fillText("threads", pad.l, Hh - pad.b + 4 * dpr);
+
+      PERF.curves.forEach(function (c, ci) {
+        g.strokeStyle = ci === 0 ? cssVar("--prudent") : cssVar("--greedy");
+        g.lineWidth = 1.8 * dpr;
+        g.beginPath();
+        c.threads.forEach(function (t, i) { i ? g.lineTo(x(t), y(c.speedup[i])) : g.moveTo(x(t), y(c.speedup[i])); });
+        g.stroke();
+        g.fillStyle = g.strokeStyle;
+        c.threads.forEach(function (t, i) {
+          g.beginPath(); g.arc(x(t), y(c.speedup[i]), 2.6 * dpr, 0, 6.28318); g.fill();
+        });
+        g.textAlign = "right"; g.textBaseline = "bottom";
+        g.font = (10 * dpr) + "px 'IBM Plex Sans Condensed', sans-serif";
+        g.fillText(fmt(c.agents) + " agents", x(16) - 3 * dpr, y(c.speedup[c.speedup.length - 1]) - 5 * dpr);
+      });
+    }
+
+    var body = document.getElementById("perfbody");
+    function showTab(k) {
+      Array.prototype.forEach.call(document.querySelectorAll("#perftabs button"),
+        function (b, i) { b.setAttribute("aria-pressed", String(i === k)); });
+      body.innerHTML = "";
+      var wanted = TABS[k][1];
+      PERF.sections.forEach(function (sec) {
+        if (!wanted.some(function (w) { return sec.title.indexOf(w) === 0 || sec.title.indexOf(w) >= 0; })) return;
+        var d = document.createElement("div");
+        d.className = "perfsec";
+        var h = "<h3>" + md(sec.title) + "</h3>";
+        sec.tables.forEach(function (t) { h += renderTable(t); });
+        sec.prose.forEach(function (para) { h += "<p>" + md(para) + "</p>"; });
+        d.innerHTML = h;
+        body.appendChild(d);
+      });
+      if (k === 0 && PERF.curves.length) {
+        var cv = document.createElement("canvas");
+        cv.className = "speedchart";
+        body.insertBefore(cv, body.firstChild);
+        drawSpeedup(cv);
+        window.addEventListener("resize", function () { drawSpeedup(cv); });
+      }
+    }
+
+    TABS.forEach(function (t, i) {
+      var b = document.createElement("button");
+      b.textContent = t[0];
+      b.setAttribute("aria-pressed", "false");
+      b.addEventListener("click", function () { showTab(i); });
+      document.getElementById("perftabs").appendChild(b);
+    });
+    showTab(0);
+  })();
+
   });
   window.addEventListener("resize", function () {
     clearTimeout(rt);
@@ -1418,5 +1606,140 @@
   });
 
   sbReset();
+
+  // ---- performance panel ----
+  // Everything here is rendered from the committed benchmark output, so the
+  // panel and the README quote the same measured numbers and cannot drift.
+  var PERF = P.perf;
+  if (PERF) (function () {
+    function esc(t) { return t.replace(/&/g, "&amp;").replace(/</g, "&lt;"); }
+    function md(t) {
+      return esc(t).replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>")
+                   .replace(/`(.+?)`/g, "<code>$1</code>");
+    }
+    function fmt(n) { return Math.round(n).toLocaleString(); }
+    var H = PERF.head;
+
+    var tiles = [
+      [H.top_speedup ? H.top_speedup.toFixed(2) + "x" : "—",
+       "speedup at 16 threads, " + fmt(H.top_agents || 0) + " agents"],
+      [H.ceiling_n ? fmt(H.ceiling_n) : "—", "agents at 60 Hz, 16 threads"],
+      [H.ceiling_1 ? fmt(H.ceiling_1) : "—", "agents at 60 Hz, 1 thread"],
+      [H.serial_1 !== undefined ? H.serial_1.toFixed(1) + "%" : "—", "measured serial fraction"],
+      [H.grid_speedup ? fmt(H.grid_speedup) + "x" : "—", "grid vs naive neighbour search"]
+    ];
+    document.getElementById("perftiles").innerHTML = tiles.map(function (t) {
+      return '<div class="tile"><div class="num">' + t[0] + '</div><div class="cap">' + t[1] + "</div></div>";
+    }).join("");
+
+    document.getElementById("perfclaim").innerHTML = H.one_hash
+      ? "<b>Every thread count in the table below produced the same 64-bit state hash.</b> " +
+        "The speedup costs nothing in reproducibility: 1 thread and 16 threads agree bit for bit."
+      : "State hashes differed across thread counts.";
+
+    var TABS = [
+      ["Threading", ["Threading scale-up"]],
+      ["60 Hz ceiling", ["Agents sustainable"]],
+      ["Serial fraction", ["Measured serial fraction"]],
+      ["Neighbour search", ["Neighbour search"]],
+      ["Memory", ["Memory layout", "False sharing"]]
+    ];
+
+    function renderTable(t) {
+      var h = "<div class=\"tablewrap\"><table><thead><tr>" +
+              t.headers.map(function (c) { return "<th>" + md(c) + "</th>"; }).join("") +
+              "</tr></thead><tbody>";
+      t.rows.forEach(function (r) {
+        h += "<tr>" + r.map(function (c) { return "<td>" + md(c) + "</td>"; }).join("") + "</tr>";
+      });
+      return h + "</tbody></table></div>";
+    }
+
+    function drawSpeedup(cv) {
+      var box = cv.getBoundingClientRect();
+      var dpr = Math.min(window.devicePixelRatio || 1, 2);
+      var W = Math.max(1, Math.round((box.width || 480) * dpr));
+      var Hh = Math.max(1, Math.round(190 * dpr));
+      if (cv.width !== W || cv.height !== Hh) { cv.width = W; cv.height = Hh; }
+      var g = cv.getContext("2d");
+      g.clearRect(0, 0, W, Hh);
+
+      var pad = { l: 34 * dpr, r: 8 * dpr, t: 8 * dpr, b: 22 * dpr };
+      var maxT = 16, maxS = 16;
+      var x = function (t) { return pad.l + (Math.log2(t) / Math.log2(maxT)) * (W - pad.l - pad.r); };
+      var y = function (v) { return Hh - pad.b - (v / maxS) * (Hh - pad.t - pad.b); };
+
+      // ideal
+      g.strokeStyle = PAL.hair; g.lineWidth = 1 * dpr; g.setLineDash([4 * dpr, 3 * dpr]);
+      g.beginPath(); g.moveTo(x(1), y(1)); g.lineTo(x(maxT), y(maxT)); g.stroke();
+      g.setLineDash([]);
+
+      // axes labels
+      g.font = (9.5 * dpr) + "px 'IBM Plex Mono', monospace";
+      g.fillStyle = PAL.faint;
+      [1, 2, 4, 8, 16].forEach(function (t) {
+        g.textAlign = "center"; g.textBaseline = "top";
+        g.fillText(String(t), x(t), Hh - pad.b + 4 * dpr);
+      });
+      [4, 8, 12, 16].forEach(function (v) {
+        g.textAlign = "right"; g.textBaseline = "middle";
+        g.fillText(v + "x", pad.l - 5 * dpr, y(v));
+        g.strokeStyle = PAL.hair; g.lineWidth = 1 * dpr;
+        g.beginPath(); g.moveTo(pad.l, y(v)); g.lineTo(W - pad.r, y(v)); g.stroke();
+      });
+      g.textAlign = "left"; g.textBaseline = "top";
+      g.fillText("threads", pad.l, Hh - pad.b + 4 * dpr);
+
+      PERF.curves.forEach(function (c, ci) {
+        g.strokeStyle = ci === 0 ? cssVar("--prudent") : cssVar("--greedy");
+        g.lineWidth = 1.8 * dpr;
+        g.beginPath();
+        c.threads.forEach(function (t, i) { i ? g.lineTo(x(t), y(c.speedup[i])) : g.moveTo(x(t), y(c.speedup[i])); });
+        g.stroke();
+        g.fillStyle = g.strokeStyle;
+        c.threads.forEach(function (t, i) {
+          g.beginPath(); g.arc(x(t), y(c.speedup[i]), 2.6 * dpr, 0, 6.28318); g.fill();
+        });
+        g.textAlign = "right"; g.textBaseline = "bottom";
+        g.font = (10 * dpr) + "px 'IBM Plex Sans Condensed', sans-serif";
+        g.fillText(fmt(c.agents) + " agents", x(16) - 3 * dpr, y(c.speedup[c.speedup.length - 1]) - 5 * dpr);
+      });
+    }
+
+    var body = document.getElementById("perfbody");
+    function showTab(k) {
+      Array.prototype.forEach.call(document.querySelectorAll("#perftabs button"),
+        function (b, i) { b.setAttribute("aria-pressed", String(i === k)); });
+      body.innerHTML = "";
+      var wanted = TABS[k][1];
+      PERF.sections.forEach(function (sec) {
+        if (!wanted.some(function (w) { return sec.title.indexOf(w) === 0 || sec.title.indexOf(w) >= 0; })) return;
+        var d = document.createElement("div");
+        d.className = "perfsec";
+        var h = "<h3>" + md(sec.title) + "</h3>";
+        sec.tables.forEach(function (t) { h += renderTable(t); });
+        sec.prose.forEach(function (para) { h += "<p>" + md(para) + "</p>"; });
+        d.innerHTML = h;
+        body.appendChild(d);
+      });
+      if (k === 0 && PERF.curves.length) {
+        var cv = document.createElement("canvas");
+        cv.className = "speedchart";
+        body.insertBefore(cv, body.firstChild);
+        drawSpeedup(cv);
+        window.addEventListener("resize", function () { drawSpeedup(cv); });
+      }
+    }
+
+    TABS.forEach(function (t, i) {
+      var b = document.createElement("button");
+      b.textContent = t[0];
+      b.setAttribute("aria-pressed", "false");
+      b.addEventListener("click", function () { showTab(i); });
+      document.getElementById("perftabs").appendChild(b);
+    });
+    showTab(0);
+  })();
+
 })();
 </script>

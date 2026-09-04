@@ -3,6 +3,7 @@
 //
 //   --mode scaling        ms/tick, speedup, efficiency and state hash at
 //                         1/2/4/8/16 threads, 50k and 200k agents
+//   --mode ceiling        agents sustainable at 60 Hz, 1 thread vs many
 //   --mode serial         directly measured serial fraction and Amdahl ceiling
 //   --mode soa_aos        structure-of-arrays vs array-of-structs
 //   --mode false_sharing  padded vs unpadded per-chunk accumulators
@@ -11,6 +12,7 @@
 #include <cmath>
 #include <cstdio>
 #include <cstring>
+#include <thread>
 #include <string>
 #include <vector>
 
@@ -132,6 +134,61 @@ void mode_serial() {
     std::printf("\nThe serial fraction is larger at 16 threads because the parallel phases "
                 "shrink while the serial ones do not -- that is precisely what the ceiling "
                 "means.\n");
+}
+
+// -------------------------------------------------------------------------
+// How many agents each configuration can carry at 60 Hz. This is the number a
+// real-time budget actually cares about: not "how fast is a tick" but "how much
+// world fits inside 16.67 ms".
+double ceiling_for(unsigned threads, const std::vector<size_t>& sizes,
+                   std::vector<double>& out_ms) {
+    constexpr double kFrameMs = 1000.0 / 60.0;
+    out_ms.clear();
+    for (const size_t n : sizes) {
+        const Config cfg = config_for(n);
+        ThreadPool pool(threads);
+        World w(cfg, 42, &pool);
+        for (int i = 0; i < 3; ++i) w.step(DT);
+        const uint64_t ticks = n >= 400000 ? 6 : (n >= 100000 ? 10 : 20);
+        const auto t0 = Clock::now();
+        for (uint64_t i = 0; i < ticks; ++i) w.step(DT);
+        out_ms.push_back(std::chrono::duration<double, std::milli>(Clock::now() - t0).count()
+                         / static_cast<double>(ticks));
+    }
+    // Log-log interpolation between the two measurements that bracket the budget.
+    for (size_t i = 0; i < sizes.size(); ++i) {
+        if (out_ms[i] <= kFrameMs) continue;
+        if (i == 0) return 0.0;
+        const double l0 = std::log(static_cast<double>(sizes[i - 1]));
+        const double l1 = std::log(static_cast<double>(sizes[i]));
+        const double t  = (std::log(kFrameMs) - std::log(out_ms[i - 1])) /
+                          (std::log(out_ms[i]) - std::log(out_ms[i - 1]));
+        return std::exp(l0 + t * (l1 - l0));
+    }
+    return static_cast<double>(sizes.back());
+}
+
+void mode_ceiling() {
+    const std::vector<size_t> sizes = g_quick
+        ? std::vector<size_t>{5000, 25000, 100000}
+        : std::vector<size_t>{25000, 50000, 100000, 200000, 400000, 800000};
+
+    std::vector<double> ms1, msN;
+    const unsigned hw = std::thread::hardware_concurrency() ? std::thread::hardware_concurrency() : 1;
+    const unsigned many = std::min(16u, hw);
+
+    const double c1 = ceiling_for(1, sizes, ms1);
+    const double cN = ceiling_for(many, sizes, msN);
+
+    std::printf("\n### Agents sustainable at 60 Hz (16.67 ms/tick)\n\n");
+    std::printf("| agents | 1 thread ms/tick | %u threads ms/tick | speedup |\n", many);
+    std::printf("|---:|---:|---:|---:|\n");
+    for (size_t i = 0; i < sizes.size(); ++i)
+        std::printf("| %zu | %.2f | %.2f | %.2fx |\n", sizes[i], ms1[i], msN[i], ms1[i] / msN[i]);
+
+    std::printf("\n**60 Hz ceiling: %.0f agents on 1 thread, %.0f agents on %u threads "
+                "(%.2fx more world in the same frame budget).**\n",
+                c1, cN, many, cN / c1);
 }
 
 // -------------------------------------------------------------------------
@@ -306,6 +363,7 @@ int main(int argc, char** argv) {
     }
 
     if (mode == "all" || mode == "scaling")       mode_scaling();
+    if (mode == "all" || mode == "ceiling")       mode_ceiling();
     if (mode == "all" || mode == "serial")        mode_serial();
     if (mode == "all" || mode == "soa_aos")       mode_soa_aos();
     if (mode == "all" || mode == "false_sharing") mode_false_sharing();

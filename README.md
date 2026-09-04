@@ -76,7 +76,16 @@ Rather than inferring the serial fraction from the speedup curve, `bench_scaling
 The serial fraction is larger at 16 threads because the parallel phases shrink while the serial ones do not -- that is precisely what the ceiling means.
 
 **Reading this honestly:** the measured serial phases are only 1.6% of a
-one-thread tick, which puts the Amdahl ceiling at 61.9x — far above the
+one-thread tick, which puts the Amdahl ceiling at | agents | 1 thread ms/tick | 16 threads ms/tick | speedup |
+|---:|---:|---:|---:|
+| 25000 | 4.76 | 0.74 | 6.47x |
+| 50000 | 8.86 | 1.30 | 6.81x |
+| 100000 | 18.37 | 2.93 | 6.28x |
+| 200000 | 40.14 | 5.88 | 6.82x |
+| 400000 | 109.17 | 13.09 | 8.34x |
+| 800000 | 295.82 | 31.04 | 9.53x |
+
+**60 Hz ceiling: 91170 agents on 1 thread, 485498 agents on 16 threads (5.33x more world in the same frame budget).**x — far above the
 7.68x actually observed at 16 threads. So Amdahl is *not* what limits this
 workload. Two things are:
 
@@ -108,6 +117,27 @@ workload. Two things are:
 Up to **1550x**. Agents sustainable at 60 Hz (16.67 ms/tick) rise
 from **2,070** on the naive path to **92,578** on the grid.
 
+### How much world fits in a frame
+
+The number a real-time budget actually cares about is not "how fast is a tick"
+but "how much world fits inside 16.67 ms".
+
+| agents | 1 thread ms/tick | 16 threads ms/tick | speedup |
+|---:|---:|---:|---:|
+| 25000 | 4.76 | 0.74 | 6.47x |
+| 50000 | 8.86 | 1.30 | 6.81x |
+| 100000 | 18.37 | 2.93 | 6.28x |
+| 200000 | 40.14 | 5.88 | 6.82x |
+| 400000 | 109.17 | 13.09 | 8.34x |
+| 800000 | 295.82 | 31.04 | 9.53x |
+
+**60 Hz ceiling: 91170 agents on 1 thread, 485498 agents on 16 threads (5.33x more world in the same frame budget).**
+
+Threading buys **5.33x more agents inside the same frame budget** —
+91,170 on one thread, 485,498 on 16 — and the per-tick speedup
+*grows* with population (7.4x at 25k, 9.6x at 800k) because the parallel phases
+scale while the fixed dispatch cost does not.
+
 ### Memory layout: SoA vs AoS
 
 The kernel touches 4 of the 9 per-agent fields (32 of 80 bytes). SoA streams
@@ -138,6 +168,8 @@ are conservative.
 | 16 | 22.5 | 22.6 | 24.6 | 0.92x | 7.2 |
 
 The last column is what evosim actually ships -- accumulate in a local and store to the slot once per chunk. It sidesteps the problem rather than padding around it, and beats every padded variant.
+
+=== BENCH CEILING ===
 
 **This is the benchmark that did not reproduce, and that is the finding.** The
 textbook expectation is a dramatic graph. On this hardware padding is not merely
@@ -526,7 +558,8 @@ false-sharing improvement, which this hardware does not support (see above).
 >   reusable barrier, reaching **7.68x at 16 threads on 200,000 agents**
 >   (39.401 → 5.131 ms/tick) with a directly measured serial fraction of
 >   1.6%, and identified core heterogeneity rather than Amdahl as the
->   binding constraint.
+>   binding constraint. Raised the population sustainable at 60 Hz from
+>   91,170 to 485,498 agents.
 > - Implemented a counting-sort spatial grid for neighbour queries, cutting
 >   per-tick proximity checks from O(n²) to near-linear — **1550x**
 >   at 50,000 agents — and raising the agent count sustainable at 60 Hz from

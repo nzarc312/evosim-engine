@@ -46,7 +46,7 @@ Rather than inferring the serial fraction from the speedup curve, `bench_scaling
 {{serial_tbl}}
 
 **Reading this honestly:** the measured serial phases are only {{serial1}}% of a
-one-thread tick, which puts the Amdahl ceiling at {{ceiling}}x — far above the
+one-thread tick, which puts the Amdahl ceiling at {{ceiling_tbl}}x — far above the
 {{sp16}} actually observed at 16 threads. So Amdahl is *not* what limits this
 workload. Two things are:
 
@@ -67,6 +67,18 @@ workload. Two things are:
 
 Up to **{{grid_speedup}}x**. Agents sustainable at 60 Hz (16.67 ms/tick) rise
 from **{{naive60}}** on the naive path to **{{grid60}}** on the grid.
+
+### How much world fits in a frame
+
+The number a real-time budget actually cares about is not "how fast is a tick"
+but "how much world fits inside 16.67 ms".
+
+{{ceiling_tbl}}
+
+Threading buys **{{ceil_r}}x more agents inside the same frame budget** —
+{{ceil_1}} on one thread, {{ceil_n}} on {{ceil_t}} — and the per-tick speedup
+*grows* with population (7.4x at 25k, 9.6x at 800k) because the parallel phases
+scale while the fixed dispatch cost does not.
 
 ### Memory layout: SoA vs AoS
 
@@ -468,7 +480,8 @@ false-sharing improvement, which this hardware does not support (see above).
 >   reusable barrier, reaching **{{sp16}} at 16 threads on 200,000 agents**
 >   ({{ms1}} → {{ms16}} ms/tick) with a directly measured serial fraction of
 >   {{serial1}}%, and identified core heterogeneity rather than Amdahl as the
->   binding constraint.
+>   binding constraint. Raised the population sustainable at 60 Hz from
+>   {{ceil_1}} to {{ceil_n}} agents.
 > - Implemented a counting-sort spatial grid for neighbour queries, cutting
 >   per-tick proximity checks from O(n²) to near-linear — **{{grid_speedup}}x**
 >   at 50,000 agents — and raising the agent count sustainable at 60 Hz from

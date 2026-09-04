@@ -82,3 +82,18 @@ fields into cache for nothing.
 | 16 | 22.5 | 22.6 | 24.6 | 0.92x | 7.2 |
 
 The last column is what evosim actually ships -- accumulate in a local and store to the slot once per chunk. It sidesteps the problem rather than padding around it, and beats every padded variant.
+
+=== BENCH CEILING ===
+
+### Agents sustainable at 60 Hz (16.67 ms/tick)
+
+| agents | 1 thread ms/tick | 16 threads ms/tick | speedup |
+|---:|---:|---:|---:|
+| 25000 | 4.76 | 0.74 | 6.47x |
+| 50000 | 8.86 | 1.30 | 6.81x |
+| 100000 | 18.37 | 2.93 | 6.28x |
+| 200000 | 40.14 | 5.88 | 6.82x |
+| 400000 | 109.17 | 13.09 | 8.34x |
+| 800000 | 295.82 | 31.04 | 9.53x |
+
+**60 Hz ceiling: 91170 agents on 1 thread, 485498 agents on 16 threads (5.33x more world in the same frame budget).**
