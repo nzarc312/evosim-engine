@@ -55,6 +55,58 @@ def read_record(path):
     return meta, blob[off:p]
 
 
+def lineage_profile(frames, meta, top_k=10):
+    """Per-frame lineage composition.
+
+    Colouring 1,000 founding lineages with 1,000 hues shows nothing: it is
+    confetti, and no viewer can tell which family is which. What is worth seeing
+    is which lineages actually take over, so this ranks them by peak share and
+    keeps the top `top_k`; everything else is pooled into one neutral bucket.
+
+    Counts come from the sampled agents in the recording, so shares are exact
+    once the population fits in the sample (which it does for most of every run
+    here) and a fixed-stride estimate before that.
+    """
+    n_sources = meta["n_sources"]
+    per_frame = []          # list of {lineage: count}
+    alive = []              # distinct lineages present
+    for off in meta["offsets"]:
+        n_agents = struct.unpack_from("<I", frames, off + 36)[0]
+        base = off + 40
+        counts = {}
+        for i in range(n_agents):
+            lin = struct.unpack_from("<H", frames, base + i * 7 + 5)[0]
+            counts[lin] = counts.get(lin, 0) + 1
+        per_frame.append(counts)
+        alive.append(len(counts))
+
+    peak = {}
+    for counts in per_frame:
+        total = sum(counts.values()) or 1
+        for lin, c in counts.items():
+            peak[lin] = max(peak.get(lin, 0.0), c / total)
+    # Rank by peak share, break ties on lineage id so the palette assignment is
+    # reproducible rather than dependent on dict ordering.
+    top = sorted(peak, key=lambda l: (-peak[l], l))[:top_k]
+    index = {lin: k for k, lin in enumerate(top)}
+
+    shares = []
+    for counts in per_frame:
+        total = sum(counts.values()) or 1
+        row = [0.0] * (len(top) + 1)
+        for lin, c in counts.items():
+            row[index.get(lin, len(top))] += c / total
+        shares.append([round(v, 4) for v in row])
+
+    # Every founder starts its own lineage, so the founding family count is just
+    # the founding population -- and frame 0 is captured before the first step,
+    # so it holds exactly that. (max(alive) would be "families visible in the
+    # sample", an undercount; the telemetry's first row is already tick 100, by
+    # which point a fast run has grown.)
+    return dict(top=top, shares=shares, alive=alive,
+                founders=int(meta["populations"][0]) if meta["populations"] else 0)
+
+
 def read_telemetry(path):
     with open(path, newline="") as f:
         rows = list(csv.DictReader(f))
@@ -195,7 +247,8 @@ def build_run(label, blurb, record_path, telemetry_path):
     run = dict(label=label, blurb=blurb,
                meta={k: v for k, v in meta.items() if k != "offsets"},
                offsets=meta["offsets"], events=events, series=series,
-               source_slots=int(slots))
+               source_slots=int(slots),
+               lineage=lineage_profile(frames, meta))
     return run, frames
 
 
@@ -240,7 +293,10 @@ def main():
 
     print(f"{args.out}  ({os.path.getsize(args.out) / 1048576:.2f} MiB, {len(runs)} runs)")
     for r in runs:
-        print(f"  {r['label']}: {r['meta']['n_frames']} frames, {len(r['events'])} events")
+        L = r["lineage"]
+        print(f"  {r['label']}: {r['meta']['n_frames']} frames, {len(r['events'])} events, "
+              f"families {L['founders']} -> {L['alive'][-1]}, "
+              f"top share {max(L['shares'][-1][:-1]) * 100:.0f}%")
         for e in r["events"]:
             print(f"     tick {e['tick']:>7,}  {e['kind']:<12} {e['label']}")
 

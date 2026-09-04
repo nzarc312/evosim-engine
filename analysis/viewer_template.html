@@ -172,6 +172,15 @@
   }
   .blurb { margin: 0; font-size: 12px; color: var(--muted); }
 
+  .sharestrip { display: block; width: 100%; height: 30px; border-radius: 2px; }
+  .sharecap {
+    font-family: "IBM Plex Sans Condensed", sans-serif; font-size: 9.5px; font-weight: 600;
+    letter-spacing: .07em; text-transform: uppercase; color: var(--faint); margin: -4px 0 0;
+  }
+  .linlegend { display: flex; flex-wrap: wrap; gap: 4px 10px; font-size: 11px; color: var(--muted); }
+  .linlegend span { display: flex; align-items: center; gap: 4px; }
+  .linlegend i { width: 9px; height: 9px; border-radius: 2px; display: inline-block; flex: none; }
+
   /* ---------- timeline ---------- */
   .tlbox { background: var(--surface); border: 1px solid var(--hairline); border-radius: 3px; padding: 9px 12px 11px; }
   .tlhead { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; margin-bottom: 6px; }
@@ -250,7 +259,7 @@
       <span>prudent</span><div class="ramp" id="ramp"></div><span>greedy</span>
     </div>
     <div class="rampwrap" id="legend-lineage" hidden>
-      <span>one hue per founding lineage, inherited by every descendant</span>
+      <span>the 10 founding families that got furthest, everything else grey — a colour swallowing the band below a map is one family taking the world</span>
     </div>
     <div class="keys">
       <span><i class="keydot" style="background:var(--biomass)"></i>live source</span>
@@ -391,8 +400,25 @@
     document.getElementById("ramp").style.background =
       "linear-gradient(90deg," + cssVar("--prudent") + "," + cssVar("--midgreed") + "," + cssVar("--greedy") + ")";
   }
-  var LIN_LUT = new Array(512);
-  for (var k = 0; k < 512; k++) LIN_LUT[k] = "hsl(" + ((k * 137.508) % 360).toFixed(1) + ",62%,55%)";
+  // Only the lineages that actually get somewhere are given a colour. Hashing
+  // a thousand founder ids onto a thousand hues produces confetti that says
+  // nothing about which family won; these ten are the ones ranked by peak share,
+  // and everything else is pooled into one neutral grey.
+  var LIN_PALETTE = ["#4E79A7", "#F28E2B", "#59A14F", "#E15759", "#B07AA1",
+                     "#76B7B2", "#EDC948", "#FF9DA7", "#9C755F", "#8CD17D"];
+  var LIN_OTHER = "#9AA5A2";
+  var LIN_INDEX = [];      // per run: {lineage id -> palette slot}
+  function buildLineageIndex() {
+    LIN_INDEX = RUNS.map(function (r) {
+      var m = {};
+      (r.lineage.top || []).forEach(function (lin, k) { m[lin] = k; });
+      return m;
+    });
+  }
+  function lineageColour(ri, lin) {
+    var k = LIN_INDEX[ri][lin];
+    return k === undefined ? LIN_OTHER : LIN_PALETTE[k % LIN_PALETTE.length];
+  }
 
   // ---- stage cards ----
   var stagesEl = document.getElementById("stages");
@@ -447,9 +473,11 @@
       var dl = document.createElement("dl");
       dl.className = "ministat";
       var fields = viewMode < 0
-        ? [["agents", "pop"], ["sources", "src"], ["greed", "greed"]]
+        ? [["agents", "pop"], ["sources", "src"],
+           [colourMode === "lineage" ? "families" : "greed",
+            colourMode === "lineage" ? "families" : "greed"]]
         : [["agents", "pop"], ["live sources", "src"], ["biomass", "stock"],
-           ["mean greed", "greed"], ["greed spread", "gsd"], ["mean sense", "sense"]];
+           ["mean greed", "greed"], ["greed spread", "gsd"], ["families", "families"]];
       var stats = {};
       fields.forEach(function (f) {
         var d = document.createElement("div");
@@ -461,6 +489,19 @@
 
       fig.appendChild(head);
       fig.appendChild(box);
+
+      // Muller-style band of lineage composition over the whole run. Only shown
+      // in lineage mode, where it is the thing that actually answers "which
+      // family took over".
+      var strip = document.createElement("canvas");
+      strip.className = "sharestrip";
+      var cap = document.createElement("p");
+      cap.className = "sharecap";
+      cap.textContent = "lineage share over time";
+      if (colourMode !== "lineage") { strip.hidden = true; cap.hidden = true; }
+      fig.appendChild(strip);
+      fig.appendChild(cap);
+
       fig.appendChild(dl);
       if (viewMode >= 0) {
         var bl = document.createElement("p");
@@ -468,8 +509,21 @@
         bl.innerHTML = run.blurb;
         fig.appendChild(bl);
       }
+      if (colourMode === "lineage") {
+        var lg = document.createElement("div");
+        lg.className = "linlegend";
+        var last = run.lineage.shares[run.lineage.shares.length - 1];
+        (run.lineage.top || []).forEach(function (lin, k) {
+          if (last[k] < 0.02) return;              // skip families that ended nowhere
+          var sp = document.createElement("span");
+          sp.innerHTML = '<i style="background:' + LIN_PALETTE[k % LIN_PALETTE.length] +
+                         '"></i>#' + lin + " · " + Math.round(last[k] * 100) + "%";
+          lg.appendChild(sp);
+        });
+        if (lg.childNodes.length) fig.appendChild(lg);
+      }
       stagesEl.appendChild(fig);
-      cards.push({ ri: ri, fig: fig, canvas: cv, ctx: cv.getContext("2d"), stats: stats });
+      cards.push({ ri: ri, fig: fig, canvas: cv, strip: strip, ctx: cv.getContext("2d"), stats: stats });
     });
   }
 
@@ -509,11 +563,13 @@
     for (var j = 0; j < f.nAgents; j++, p += 7) {
       g.fillStyle = colourMode === "greed"
         ? GREED_LUT[bytes[p + 4]]
-        : LIN_LUT[dv.getUint16(p + 5, true) % 512];
+        : lineageColour(card.ri, dv.getUint16(p + 5, true));
       g.beginPath();
       g.arc(dv.getUint16(p, true) * s, dv.getUint16(p + 2, true) * s, ar, 0, 6.28318);
       g.fill();
     }
+
+    if (colourMode === "lineage" && card.strip && !card.strip.hidden) drawShares(card);
 
     card.fig.classList.toggle("dim", f.pop === 0);
     if (card.stats.pop)   card.stats.pop.textContent = f.pop.toLocaleString();
@@ -522,6 +578,43 @@
     if (card.stats.greed) card.stats.greed.textContent = f.pop ? f.greed.toFixed(3) : "—";
     if (card.stats.gsd)   card.stats.gsd.textContent = f.pop ? "±" + f.greedSd.toFixed(3) : "—";
     if (card.stats.sense) card.stats.sense.textContent = f.pop ? f.sense.toFixed(2) : "—";
+    if (card.stats.families) {
+      var al = run.lineage.alive[MAP[card.ri][cur]];
+      card.stats.families.textContent = al + " / " + run.lineage.founders;
+    }
+  }
+
+  // A stacked band per frame: what fraction of the population each of the top
+  // lineages holds. A single colour swallowing the band is one family taking
+  // over the world.
+  function drawShares(card) {
+    var run = RUNS[card.ri], cv = card.strip, g = cv.getContext("2d");
+    var box = cv.getBoundingClientRect();
+    var dpr = Math.min(window.devicePixelRatio || 1, 2);
+    var W = Math.max(1, Math.round((box.width || 300) * dpr));
+    var H = Math.max(1, Math.round(30 * dpr));
+    if (cv.width !== W || cv.height !== H) { cv.width = W; cv.height = H; }
+
+    g.fillStyle = PAL.bg;
+    g.fillRect(0, 0, W, H);
+
+    var rows = run.lineage.shares, n = rows.length;
+    var colW = W / Math.max(1, n);
+    for (var i = 0; i < n; i++) {
+      var x = i * colW, y = 0;
+      for (var k = 0; k < rows[i].length; k++) {
+        var h = rows[i][k] * H;
+        if (h <= 0) continue;
+        g.fillStyle = k < rows[i].length - 1
+          ? LIN_PALETTE[k % LIN_PALETTE.length] : LIN_OTHER;
+        g.fillRect(x, y, Math.ceil(colW), Math.ceil(h));
+        y += h;
+      }
+    }
+    // playhead
+    var px = (MAP[card.ri][cur] / Math.max(1, n - 1)) * W;
+    g.fillStyle = cssVar("--ink");
+    g.fillRect(Math.max(0, Math.min(W - 1, px)), 0, Math.max(1, dpr), H);
   }
 
   // ---- strip chart: one lane per measure, one line per visible run ----
@@ -714,6 +807,7 @@
     document.getElementById("mode-lineage").setAttribute("aria-pressed", String(m === "lineage"));
     document.getElementById("legend-greed").hidden = m !== "greed";
     document.getElementById("legend-lineage").hidden = m !== "lineage";
+    buildStages();   // the cards carry different stats and the share strip
     render();
   }
 
@@ -759,9 +853,13 @@
     "Runs of the same world, differing only in how much of a food source an agent " +
     "takes per visit. Dots are agents, coloured by greed; squares are renewable food " +
     "sources that can be harvested to death.";
-  document.getElementById("footnote").innerHTML = P.caption || "";
+  document.getElementById("footnote").innerHTML = (P.caption || "") +
+    " Every founder starts its own family, inherited unchanged by its descendants; the " +
+    "family count is taken over the sampled agents, so it is exact once the population " +
+    "fits the sample and a slight undercount during the early booms.";
 
   refreshPalette();
+  buildLineageIndex();
   setView(-1);
 })();
 </script>
