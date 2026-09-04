@@ -448,7 +448,16 @@ head-to-head you watch the red dots take over and then vanish.
 
 Step or scrub through 30,000 ticks and jump between automatically detected
 pivotal moments: booms and crashes, the resource passing half and three-quarters
-destroyed, greed peaking and reversing, extinction, and recovery.
+destroyed, greed peaking and reversing, extinction, and recovery. Lineage mode
+colours the ten founding families that got furthest and pools the rest, with a
+band under each map showing composition over the whole run — 507 of 1,000
+founding families survive the prudent run, 23 the mixed one, none the greedy one.
+
+Below the recordings is a **sandbox**: sliders for founding agents, founder
+greed, food sources, regrowth, recolonisation and seed, running live in the
+browser. That one is the same ruleset reimplemented in JavaScript rather than the
+C++ engine — it is not bit-identical to the recordings, though the same seed and
+sliders reproduce the same run every time.
 
 ```bash
 ./build/evosim --seed 42 --ticks 30000 --set population.initial_greed=0.5 \

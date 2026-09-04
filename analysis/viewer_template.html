@@ -181,6 +181,43 @@
   .linlegend span { display: flex; align-items: center; gap: 4px; }
   .linlegend i { width: 9px; height: 9px; border-radius: 2px; display: inline-block; flex: none; }
 
+  /* ---------- sandbox ---------- */
+  .sandbox { margin-top: 14px; }
+  .sandgrid { display: grid; grid-template-columns: minmax(0, 360px) minmax(0, 1fr); gap: 14px; align-items: start; }
+  @media (max-width: 780px) { .sandgrid { grid-template-columns: minmax(0,1fr); } }
+  .sandstage { height: clamp(240px, 38vh, 360px); }
+  .sandctl { display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+
+  .ctlgrid { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 8px 16px; }
+  .ctl { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+  .ctlname {
+    font-family: "IBM Plex Sans Condensed", sans-serif; font-size: 10px; font-weight: 600;
+    letter-spacing: .08em; text-transform: uppercase; color: var(--faint);
+    display: flex; justify-content: space-between; gap: 8px;
+  }
+  .ctlname b {
+    font-family: "IBM Plex Mono", monospace; font-size: 11.5px; font-weight: 600;
+    letter-spacing: 0; text-transform: none; color: var(--ink);
+    font-variant-numeric: tabular-nums;
+  }
+  .ctl input[type="range"] { width: 100%; margin: 0; accent-color: var(--ink); }
+
+  .sandbtns { display: flex; flex-wrap: wrap; gap: 7px; align-items: center; }
+  .sandbtns button {
+    appearance: none; background: var(--surface); color: var(--ink);
+    border: 1px solid var(--hairline-strong); border-radius: 3px; padding: 4px 10px; cursor: pointer;
+    font-family: "IBM Plex Sans Condensed", sans-serif; font-size: 12px; font-weight: 600;
+  }
+  .sandbtns button:hover { border-color: var(--ink); }
+  .sandbtns button:focus-visible { outline: 2px solid var(--ink); outline-offset: 1px; }
+  .sandbtns .primary { background: var(--ink); color: var(--ground); border-color: var(--ink); min-width: 66px; }
+  .sandbtns .spd { font-size: 12px; color: var(--muted); display: flex; align-items: center; gap: 5px; margin-left: auto; }
+
+  .sandstat { grid-template-columns: repeat(6, 1fr); }
+  @media (max-width: 620px) { .sandstat { grid-template-columns: repeat(3, 1fr); } }
+  .sandchart { display: block; width: 100%; height: 64px; border-radius: 2px; }
+  .sandnote { margin: 0; font-size: 11.5px; color: var(--faint); }
+
   /* ---------- timeline ---------- */
   .tlbox { background: var(--surface); border: 1px solid var(--hairline); border-radius: 3px; padding: 9px 12px 11px; }
   .tlhead { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; margin-bottom: 6px; }
@@ -300,6 +337,72 @@
       </label>
     </div>
     <div class="notes" id="notes"></div>
+  </section>
+
+  <section class="tlbox sandbox">
+    <div class="tlhead">
+      <h2>Sandbox &middot; run your own</h2>
+      <span class="hint">Simulated live in your browser &mdash; not a recording</span>
+    </div>
+
+    <div class="sandgrid">
+      <div class="canvasbox sandstage"><canvas id="sbworld"></canvas></div>
+
+      <div class="sandctl">
+        <div class="ctlgrid">
+          <label class="ctl">
+            <span class="ctlname">Founding agents <b id="v-agents">1000</b></span>
+            <input type="range" id="s-agents" min="100" max="3000" step="50" value="1000">
+          </label>
+          <label class="ctl">
+            <span class="ctlname">Founder greed <b id="v-greed">0.50</b></span>
+            <input type="range" id="s-greed" min="0.05" max="1" step="0.01" value="0.5">
+          </label>
+          <label class="ctl">
+            <span class="ctlname">Food sources <b id="v-food">2000</b></span>
+            <input type="range" id="s-food" min="200" max="4000" step="100" value="2000">
+          </label>
+          <label class="ctl">
+            <span class="ctlname">Regrowth /sec <b id="v-regen">3.0</b></span>
+            <input type="range" id="s-regen" min="0" max="8" step="0.25" value="3">
+          </label>
+          <label class="ctl">
+            <span class="ctlname">Recolonise /sec <b id="v-recol">10</b></span>
+            <input type="range" id="s-recol" min="0" max="40" step="1" value="10">
+          </label>
+          <label class="ctl">
+            <span class="ctlname">Seed <b id="v-seed">42</b></span>
+            <input type="range" id="s-seed" min="1" max="9999" step="1" value="42">
+          </label>
+        </div>
+
+        <div class="sandbtns">
+          <button class="primary" id="sb-play">Run</button>
+          <button id="sb-reset">Reset</button>
+          <button id="sb-dice">🎲 Random seed</button>
+          <label class="spd">Speed
+            <select id="sb-speed">
+              <option value="1">1&times;</option>
+              <option value="4" selected>4&times;</option>
+              <option value="10">10&times;</option>
+              <option value="30">30&times;</option>
+            </select>
+          </label>
+        </div>
+
+        <dl class="ministat sandstat">
+          <div><dt>tick</dt><dd id="sb-tick">0</dd></div>
+          <div><dt>agents</dt><dd id="sb-pop">—</dd></div>
+          <div><dt>live sources</dt><dd id="sb-src">—</dd></div>
+          <div><dt>mean greed</dt><dd id="sb-greed">—</dd></div>
+          <div><dt>families</dt><dd id="sb-fam">—</dd></div>
+          <div><dt>verdict</dt><dd id="sb-verdict">—</dd></div>
+        </dl>
+
+        <canvas id="sbchart" class="sandchart"></canvas>
+        <p class="sandnote" id="sb-note"></p>
+      </div>
+    </div>
   </section>
 
   <p class="footnote" id="footnote"></p>
@@ -693,7 +796,7 @@
         b.title = RUNS[ri].label + " — " + e.label + " at tick " + e.tick.toLocaleString();
         b.setAttribute("aria-label", b.title);
         b.innerHTML = "<b></b>";
-        b.addEventListener("click", function () { setPlaying(false); goToTick(e.tick); });
+        b.addEventListener("click", function () { setPlaying(false); goTo(stepForTick(e.tick)); });
         row.appendChild(b);
       });
       markersEl.appendChild(row);
@@ -702,10 +805,10 @@
 
   var notesEl = document.getElementById("notes");
   function showNotes() {
-    var tick = MASTER[cur], hits = [];
+    var hits = [];
     visibleRuns().forEach(function (ri) {
       RUNS[ri].events.forEach(function (e) {
-        if (Math.abs(e.tick - tick) <= RUNS[ri].meta.every) hits.push([ri, e]);
+        if (stepForTick(e.tick) === cur) hits.push([ri, e]);
       });
     });
     notesEl.innerHTML = "";
@@ -767,17 +870,45 @@
     if (on) requestAnimationFrame(loop);
   }
 
+  // Frame index for a tick on the master cursor.
+  function stepForTick(t) {
+    var best = 0, bd = Infinity;
+    for (var i = 0; i < N_STEPS; i++) {
+      var d = Math.abs(MASTER[i] - t);
+      if (d < bd) { bd = d; best = i; }
+    }
+    return best;
+  }
+
+  // Every visible event, as a sorted list of DISTINCT frame indices.
+  //
+  // The first version of this compared raw ticks and then snapped to the nearest
+  // frame, which meant two events inside one frame interval both resolved to the
+  // frame you were already standing on -- and the button did nothing. Frames are
+  // 250 ticks apart, events routinely are not, so that happened often enough to
+  // look broken. Working in frame indices makes every press move or correctly
+  // report that there is nowhere left to go.
+  function eventSteps() {
+    var set = {};
+    visibleRuns().forEach(function (ri) {
+      RUNS[ri].events.forEach(function (e) { set[stepForTick(e.tick)] = true; });
+    });
+    return Object.keys(set).map(Number).sort(function (a, b) { return a - b; });
+  }
+
   function jumpEvent(dir) {
     setPlaying(false);
-    var t = MASTER[cur], all = [];
-    visibleRuns().forEach(function (ri) {
-      RUNS[ri].events.forEach(function (e) { all.push(e.tick); });
-    });
-    all.sort(function (a, b) { return a - b; });
-    for (var i = 0; i < all.length; i++) {
-      var c = dir > 0 ? all[i] : all[all.length - 1 - i];
-      if (dir > 0 ? c > t + 1 : c < t - 1) { goToTick(c); return; }
+    var steps = eventSteps();
+    if (!steps.length) return;
+    var target = null;
+    if (dir > 0) {
+      for (var i = 0; i < steps.length; i++) if (steps[i] > cur) { target = steps[i]; break; }
+    } else {
+      for (var j = steps.length - 1; j >= 0; j--) if (steps[j] < cur) { target = steps[j]; break; }
     }
+    // Wrap rather than dead-ending at the first or last marker.
+    if (target === null) target = dir > 0 ? steps[0] : steps[steps.length - 1];
+    goTo(target);
   }
 
   // ---- view switching ----
@@ -832,15 +963,279 @@
   });
 
   var rt;
-  window.addEventListener("resize", function () {
-    clearTimeout(rt);
-    rt = setTimeout(function () { drawStrip(); render(); }, 120);
-  });
   if (window.matchMedia) {
     var mq = window.matchMedia("(prefers-color-scheme: dark)");
-    var onTheme = function () { refreshPalette(); buildStages(); buildMarkers(); drawStrip(); render(); };
+    var onTheme = function () {
+      refreshPalette(); buildStages(); buildMarkers(); drawStrip(); render(); sbDraw();
+    };
     if (mq.addEventListener) mq.addEventListener("change", onTheme); else mq.addListener(onTheme);
   }
+
+
+  // ==========================================================================
+  // Sandbox: the same rules, reimplemented in JavaScript so the sliders can
+  // actually run something.
+  //
+  // Be clear about what this is NOT. It is not the C++ engine and it is not
+  // bit-identical to the recordings above -- it uses a 32-bit stateless hash
+  // instead of the counter-based splitmix RNG, and the browser's own sin/cos
+  // rather than the deterministic polynomials the engine ships. What it does
+  // share is every rule that matters: the same energy economy, the same
+  // fractional-harvest greed, the same collapse threshold, the same digestion
+  // cooldown, the same order-preserving compaction. Same seed and sliders give
+  // the same run in this browser, every time.
+  // ==========================================================================
+  var SB = (function () {
+    var W = 500, H = 500, DT = 1 / 60;
+    var CAP = 25, EPU = 3.0, COLLAPSE = 0.10, DIGEST = 60, SEEDLING = 0.5;
+    var BASE = 1.0, MOVEC = 0.35, SENSEC = 0.15, REPRO = 100, MAXAGE = 3000;
+    var SIGMA = 0.05, MAXAGENTS = 6000, MAXTURN = 0.40, TWOPI = 6.283185307179586;
+    var SPEED = [0.5, 3.0], SIZE = [0.5, 2.0], SENSE = [1.0, 15.0], GREED = [0.05, 1.0];
+
+    // Stateless hash: pure in (seed, id, tick, purpose, sub), like the engine's
+    // RNG, so nothing depends on evaluation order.
+    function rnd(seed, id, tick, purpose, sub) {
+      var h = (seed ^ 0x9E3779B9) >>> 0;
+      h = Math.imul(h ^ (id >>> 0), 0x85EBCA6B) >>> 0;
+      h = Math.imul(h ^ (tick >>> 0), 0xC2B2AE35) >>> 0;
+      h = Math.imul(h ^ (((purpose * 0x9E3779B1) + sub) >>> 0), 0x27D4EB2F) >>> 0;
+      h ^= h >>> 15; h = Math.imul(h, 0x2545F491) >>> 0; h ^= h >>> 13;
+      return (h >>> 0) / 4294967296;
+    }
+    function gauss(seed, id, tick, purpose, sub) {
+      var u1 = rnd(seed, id, tick, purpose, sub) * 0.9999998 + 1e-7;
+      var u2 = rnd(seed, id, tick, purpose, sub + 1);
+      return Math.sqrt(-2 * Math.log(u1)) * Math.cos(TWOPI * u2);
+    }
+    function clamp(v, r) { return v < r[0] ? r[0] : (v > r[1] ? r[1] : v); }
+    function wrapPos(p, e) { return p < 0 ? p + e : (p >= e ? p - e : p); }
+    function wrapD(d, e) { return d > 0.5 * e ? d - e : (d < -0.5 * e ? d + e : d); }
+
+    var st = null;
+
+    function reset(o) {
+      var n = o.agents | 0, f = o.food | 0;
+      var a = { x: [], y: [], vx: [], vy: [], e: [], sp: [], sz: [], se: [], gr: [],
+                age: [], cd: [], lin: [] };
+      for (var i = 0; i < n; i++) {
+        a.x.push(rnd(o.seed, i, 0, 5, 0) * W);
+        a.y.push(rnd(o.seed, i, 0, 5, 1) * H);
+        var spd = SPEED[0] + rnd(o.seed, i, 0, 5, 2) * (SPEED[1] - SPEED[0]);
+        a.sp.push(spd);
+        a.sz.push(SIZE[0] + rnd(o.seed, i, 0, 5, 3) * (SIZE[1] - SIZE[0]));
+        a.se.push(SENSE[0] + rnd(o.seed, i, 0, 5, 4) * (SENSE[1] - SENSE[0]));
+        a.gr.push(clamp(o.greed, GREED));
+        var ang = TWOPI * rnd(o.seed, i, 0, 5, 5);
+        a.vx.push(Math.cos(ang) * spd); a.vy.push(Math.sin(ang) * spd);
+        a.e.push(50); a.age.push(0); a.cd.push(0); a.lin.push(i);
+      }
+      var fd = { x: new Float64Array(f), y: new Float64Array(f),
+                 s: new Float64Array(f), alive: new Uint8Array(f) };
+      for (var k = 0; k < f; k++) {
+        fd.x[k] = rnd(o.seed, k, 0, 2, 0) * W;
+        fd.y[k] = rnd(o.seed, k, 0, 2, 1) * H;
+        fd.s[k] = CAP; fd.alive[k] = 1;
+      }
+      st = { o: o, a: a, f: fd, tick: 0, nextId: n, accum: 0,
+             hist: { t: [], pop: [], src: [], gr: [] },
+             grid: { cellOf: new Int32Array(f), starts: null, sorted: new Int32Array(f),
+                     nx: 1, ny: 1, cw: 1, ch: 1 },
+             founders: n, peakPop: n, minSrc: f };
+      sample();
+      return st;
+    }
+
+    // Counting sort into flat arrays, same shape as the engine's spatial grid.
+    function buildGrid() {
+      var f = st.f, g = st.grid, n = f.x.length;
+      var r = 5;
+      for (var i = 0; i < st.a.x.length; i++) {
+        var q = Math.max(st.a.se[i], st.a.sz[i]);
+        if (q > r) r = q;
+      }
+      g.nx = Math.max(1, Math.floor(W / r));
+      g.ny = Math.max(1, Math.floor(H / r));
+      g.cw = W / g.nx; g.ch = H / g.ny;
+      var nc = g.nx * g.ny;
+      if (!g.starts || g.starts.length !== nc + 1) g.starts = new Int32Array(nc + 1);
+      else g.starts.fill(0);
+      if (g.cellOf.length !== n) { g.cellOf = new Int32Array(n); g.sorted = new Int32Array(n); }
+
+      var counts = new Int32Array(nc + 1);
+      for (var k = 0; k < n; k++) {
+        if (!f.alive[k]) { g.cellOf[k] = -1; continue; }
+        var cx = Math.min(g.nx - 1, Math.max(0, (f.x[k] / g.cw) | 0));
+        var cy = Math.min(g.ny - 1, Math.max(0, (f.y[k] / g.ch) | 0));
+        var c = cy * g.nx + cx;
+        g.cellOf[k] = c; counts[c + 1]++;
+      }
+      for (var c2 = 0; c2 < nc; c2++) counts[c2 + 1] += counts[c2];
+      g.starts.set(counts);
+      var cur2 = counts.slice();
+      for (var k2 = 0; k2 < n; k2++) {
+        var cc = g.cellOf[k2];
+        if (cc >= 0) g.sorted[cur2[cc]++] = k2;
+      }
+      g.count = cur2[nc];
+    }
+
+    // Nearest live source within r, ties broken on index -- as in the engine.
+    function nearest(x, y, r) {
+      var g = st.grid, f = st.f;
+      var hx = Math.ceil(r / g.cw), hy = Math.ceil(r / g.ch);
+      var cx = Math.min(g.nx - 1, Math.max(0, (x / g.cw) | 0));
+      var cy = Math.min(g.ny - 1, Math.max(0, (y / g.ch) | 0));
+      var allX = (2 * hx + 1) >= g.nx, allY = (2 * hy + 1) >= g.ny;
+      var best = r * r, bi = -1;
+      for (var dy = allY ? 0 : -hy; dy <= (allY ? g.ny - 1 : hy); dy++) {
+        var gy = allY ? dy : ((cy + dy) % g.ny + g.ny) % g.ny;
+        for (var dx = allX ? 0 : -hx; dx <= (allX ? g.nx - 1 : hx); dx++) {
+          var gx = allX ? dx : ((cx + dx) % g.nx + g.nx) % g.nx;
+          var cell = gy * g.nx + gx;
+          for (var p2 = g.starts[cell]; p2 < g.starts[cell + 1]; p2++) {
+            var fi = g.sorted[p2];
+            if (!f.alive[fi]) continue;
+            var ddx = wrapD(f.x[fi] - x, W), ddy = wrapD(f.y[fi] - y, H);
+            var d2 = ddx * ddx + ddy * ddy;
+            if (d2 < best || (d2 === best && bi >= 0 && fi < bi)) { best = d2; bi = fi; }
+          }
+        }
+      }
+      return bi;
+    }
+
+    function step() {
+      var a = st.a, f = st.f, o = st.o, n = a.x.length, t = st.tick;
+      buildGrid();
+
+      var claims = [];
+      for (var i = 0; i < n; i++) {
+        var eatR = a.sz[i], qr = Math.max(a.se[i], eatR);
+        var tgt = nearest(a.x[i], a.y[i], qr);
+
+        var dx, dy, steer = false;
+        if (tgt >= 0) {
+          dx = wrapD(f.x[tgt] - a.x[i], W); dy = wrapD(f.y[tgt] - a.y[i], H);
+          steer = (dx * dx + dy * dy) <= a.se[i] * a.se[i];
+        }
+        var ux, uy;
+        if (steer) {
+          var L = Math.sqrt(dx * dx + dy * dy);
+          if (L > 1e-12) { ux = dx / L; uy = dy / L; } else { ux = 1; uy = 0; }
+        } else {
+          ux = a.vx[i]; uy = a.vy[i];
+          var L2 = Math.sqrt(ux * ux + uy * uy);
+          if (L2 > 1e-12) { ux /= L2; uy /= L2; }
+          else { var ang = TWOPI * rnd(o.seed, a.lin[i] * 7919 + i, t, 3, 0); ux = Math.cos(ang); uy = Math.sin(ang); }
+          var turn = (rnd(o.seed, a.lin[i] * 7919 + i, t, 3, 1) - 0.5) * 2 * MAXTURN;
+          var cs = Math.cos(turn), sn = Math.sin(turn);
+          var nx2 = ux * cs - uy * sn; uy = ux * sn + uy * cs; ux = nx2;
+        }
+
+        a.vx[i] = ux * a.sp[i]; a.vy[i] = uy * a.sp[i];
+        a.x[i] = wrapPos(a.x[i] + a.vx[i] * DT, W);
+        a.y[i] = wrapPos(a.y[i] + a.vy[i] * DT, H);
+
+        var cost = BASE + MOVEC * a.sp[i] * a.sp[i] * a.sz[i] * a.sz[i] * a.sz[i] + SENSEC * a.se[i];
+        a.e[i] -= cost * DT;
+        a.age[i]++;
+        if (a.cd[i] > 0) a.cd[i]--;
+
+        if (tgt >= 0 && a.cd[i] === 0) {
+          var bx = wrapD(f.x[tgt] - a.x[i], W), by = wrapD(f.y[tgt] - a.y[i], H);
+          if (bx * bx + by * by <= eatR * eatR) claims.push(tgt * 100000 + i);
+        }
+      }
+
+      // Serial resolve in (source, agent index) order: divisible stock, so
+      // several agents can share one source and the split is fixed.
+      claims.sort(function (p, q) { return p - q; });
+      for (var c = 0; c < claims.length; c++) {
+        var fi = (claims[c] / 100000) | 0, ai = claims[c] % 100000;
+        if (!f.alive[fi]) continue;
+        var bite = a.gr[ai] * f.s[fi];
+        if (bite <= 0) continue;
+        f.s[fi] -= bite;
+        a.e[ai] = Math.min(a.e[ai] + bite * EPU, 100 * (1 + a.sz[ai]));
+        a.cd[ai] = DIGEST;
+        if (f.s[fi] < COLLAPSE * CAP) { f.s[fi] = 0; f.alive[fi] = 0; }
+      }
+
+      // Order-preserving compaction, then offspring at the parent's position.
+      var w = 0;
+      for (var r2 = 0; r2 < n; r2++) {
+        if (a.e[r2] <= 0 || a.age[r2] > MAXAGE) continue;
+        if (w !== r2) {
+          a.x[w] = a.x[r2]; a.y[w] = a.y[r2]; a.vx[w] = a.vx[r2]; a.vy[w] = a.vy[r2];
+          a.e[w] = a.e[r2]; a.sp[w] = a.sp[r2]; a.sz[w] = a.sz[r2]; a.se[w] = a.se[r2];
+          a.gr[w] = a.gr[r2]; a.age[w] = a.age[r2]; a.cd[w] = a.cd[r2]; a.lin[w] = a.lin[r2];
+        }
+        w++;
+      }
+      for (var key in a) a[key].length = w;
+
+      var parents = w;
+      for (var pi = 0; pi < parents && a.x.length < MAXAGENTS; pi++) {
+        if (a.e[pi] < REPRO) continue;
+        var half = a.e[pi] * 0.5;
+        a.e[pi] = half;
+        var cid = st.nextId++;
+        var cs2 = clamp(a.sp[pi] + gauss(o.seed, cid, t, 1, 0) * SIGMA * (SPEED[1] - SPEED[0]), SPEED);
+        var cz = clamp(a.sz[pi] + gauss(o.seed, cid, t, 1, 2) * SIGMA * (SIZE[1] - SIZE[0]), SIZE);
+        var cn = clamp(a.se[pi] + gauss(o.seed, cid, t, 1, 4) * SIGMA * (SENSE[1] - SENSE[0]), SENSE);
+        var cg = clamp(a.gr[pi] + gauss(o.seed, cid, t, 1, 8) * SIGMA * (GREED[1] - GREED[0]), GREED);
+        var ang2 = TWOPI * rnd(o.seed, cid, t, 1, 6);
+        a.x.push(a.x[pi]); a.y.push(a.y[pi]);
+        a.vx.push(Math.cos(ang2) * cs2); a.vy.push(Math.sin(ang2) * cs2);
+        a.e.push(half); a.sp.push(cs2); a.sz.push(cz); a.se.push(cn); a.gr.push(cg);
+        a.age.push(0); a.cd.push(0); a.lin.push(a.lin[pi]);
+      }
+
+      // Regrow, then recolonise as the accumulated rate allows.
+      var regen = o.regen * DT, alive = 0;
+      for (var k3 = 0; k3 < f.x.length; k3++) {
+        if (!f.alive[k3]) continue;
+        f.s[k3] = Math.min(CAP, f.s[k3] + regen);
+        alive++;
+      }
+      st.accum += o.recol * DT;
+      for (var k4 = 0; k4 < f.x.length && st.accum >= 1 && alive < f.x.length; k4++) {
+        if (f.alive[k4]) continue;
+        f.x[k4] = rnd(o.seed, k4, t, 2, 0) * W;
+        f.y[k4] = rnd(o.seed, k4, t, 2, 1) * H;
+        f.s[k4] = SEEDLING * CAP; f.alive[k4] = 1;
+        st.accum -= 1; alive++;
+      }
+
+      st.tick++;
+      if (a.x.length > st.peakPop) st.peakPop = a.x.length;
+      if (alive < st.minSrc) st.minSrc = alive;
+      if (st.tick % 20 === 0) sample();
+    }
+
+    function sample() {
+      var a = st.a, h = st.hist, g = 0, alive = 0;
+      for (var i = 0; i < a.x.length; i++) g += a.gr[i];
+      for (var k = 0; k < st.f.alive.length; k++) alive += st.f.alive[k];
+      h.t.push(st.tick);
+      h.pop.push(a.x.length);
+      h.src.push(alive);
+      h.gr.push(a.x.length ? g / a.x.length : 0);
+      if (h.t.length > 900) { h.t.shift(); h.pop.shift(); h.src.shift(); h.gr.shift(); }
+    }
+
+    function stats() {
+      var a = st.a, g = 0, fam = {}, alive = 0, stock = 0;
+      for (var i = 0; i < a.x.length; i++) { g += a.gr[i]; fam[a.lin[i]] = 1; }
+      for (var k = 0; k < st.f.alive.length; k++) { alive += st.f.alive[k]; stock += st.f.s[k]; }
+      return { tick: st.tick, pop: a.x.length, src: alive, stock: stock,
+               greed: a.x.length ? g / a.x.length : 0,
+               families: Object.keys(fam).length, founders: st.founders,
+               slots: st.f.x.length };
+    }
+
+    return { reset: reset, step: step, stats: stats, state: function () { return st; } };
+  })();
 
   // ---- boot ----
   var m0 = RUNS[0].meta;
@@ -861,5 +1256,167 @@
   refreshPalette();
   buildLineageIndex();
   setView(-1);
+
+  // ---- sandbox UI ----
+  var sbCanvas = document.getElementById("sbworld");
+  var sbCtx = sbCanvas.getContext("2d");
+  var sbChart = document.getElementById("sbchart");
+  var sbChartCtx = sbChart.getContext("2d");
+  var sbPlaying = false;
+
+  var SB_CTRL = [
+    ["s-agents", "v-agents", "agents", function (v) { return String(v | 0); }],
+    ["s-greed",  "v-greed",  "greed",  function (v) { return v.toFixed(2); }],
+    ["s-food",   "v-food",   "food",   function (v) { return String(v | 0); }],
+    ["s-regen",  "v-regen",  "regen",  function (v) { return v.toFixed(2); }],
+    ["s-recol",  "v-recol",  "recol",  function (v) { return String(v | 0); }],
+    ["s-seed",   "v-seed",   "seed",   function (v) { return String(v | 0); }]
+  ];
+
+  function sbOptions() {
+    var o = {};
+    SB_CTRL.forEach(function (c) {
+      var val = Number(document.getElementById(c[0]).value);
+      o[c[2]] = val;
+      document.getElementById(c[1]).textContent = c[3](val);
+    });
+    return o;
+  }
+
+  function sbReset() {
+    sbSetPlaying(false);
+    SB.reset(sbOptions());
+    sbDraw();
+  }
+
+  function sbVerdict(st) {
+    if (st.pop === 0) return ["extinct", cssVar("--ev-extinction")];
+    if (st.src < 0.25 * st.slots) return ["commons failing", cssVar("--ev-crash")];
+    if (st.src < 0.75 * st.slots) return ["under pressure", cssVar("--ev-resource")];
+    return ["intact", cssVar("--ev-boom")];
+  }
+
+  function sbDrawWorld() {
+    var st = SB.state(), a = st.a, f = st.f;
+    var box = sbCanvas.getBoundingClientRect();
+    var dpr = Math.min(window.devicePixelRatio || 1, 2);
+    var side = Math.round(Math.min(box.width || 0, box.height || 0) * dpr) || 340;
+    if (sbCanvas.width !== side) { sbCanvas.width = side; sbCanvas.height = side; }
+    var Wd = sbCanvas.width, sc2 = Wd / 500;
+
+    sbCtx.fillStyle = PAL.bg;
+    sbCtx.fillRect(0, 0, Wd, Wd);
+
+    var srcR = Math.max(1, Wd / 300);
+    for (var k = 0; k < f.x.length; k++) {
+      var x = f.x[k] * sc2, y = f.y[k] * sc2;
+      if (!f.alive[k]) {
+        sbCtx.fillStyle = PAL.dead; sbCtx.globalAlpha = 0.4;
+        sbCtx.fillRect(x - srcR * 0.5, y - srcR * 0.5, srcR, srcR);
+      } else {
+        var fr = f.s[k] / 25;
+        sbCtx.fillStyle = PAL.biomass; sbCtx.globalAlpha = 0.28 + 0.6 * fr;
+        var r = srcR * (0.6 + 0.85 * fr);
+        sbCtx.fillRect(x - r * 0.5, y - r * 0.5, r, r);
+      }
+    }
+    sbCtx.globalAlpha = 1;
+
+    var ar = Math.max(1.1, Wd / 300);
+    for (var i = 0; i < a.x.length; i++) {
+      sbCtx.fillStyle = GREED_LUT[Math.max(0, Math.min(255, Math.round(a.gr[i] * 255)))];
+      sbCtx.beginPath();
+      sbCtx.arc(a.x[i] * sc2, a.y[i] * sc2, ar, 0, 6.28318);
+      sbCtx.fill();
+    }
+  }
+
+  function sbDrawChart() {
+    var h = SB.state().hist;
+    var box = sbChart.getBoundingClientRect();
+    var dpr = Math.min(window.devicePixelRatio || 1, 2);
+    var Wd = Math.max(1, Math.round((box.width || 400) * dpr));
+    var Hd = Math.max(1, Math.round(64 * dpr));
+    if (sbChart.width !== Wd || sbChart.height !== Hd) { sbChart.width = Wd; sbChart.height = Hd; }
+    sbChartCtx.clearRect(0, 0, Wd, Hd);
+    if (h.t.length < 2) return;
+
+    var lanes = [[h.pop, cssVar("--ink")], [h.src, cssVar("--biomass")], [h.gr, cssVar("--greedy")]];
+    var pad = 3 * dpr, lane = (Hd - pad * 2) / 3, gap = 2 * dpr;
+    lanes.forEach(function (L, li) {
+      var v = L[0], max = 0;
+      for (var i = 0; i < v.length; i++) if (v[i] > max) max = v[i];
+      if (max <= 0) max = 1;
+      var y0 = pad + lane * li, hh = lane - gap;
+      sbChartCtx.beginPath();
+      for (var j = 0; j < v.length; j++) {
+        var x = (j / (v.length - 1)) * Wd;
+        var y = y0 + hh - (v[j] / max) * hh;
+        j ? sbChartCtx.lineTo(x, y) : sbChartCtx.moveTo(x, y);
+      }
+      sbChartCtx.strokeStyle = L[1];
+      sbChartCtx.lineWidth = 1.3 * dpr;
+      sbChartCtx.stroke();
+    });
+    sbChartCtx.font = (9 * dpr) + "px 'IBM Plex Mono', monospace";
+    sbChartCtx.fillStyle = PAL.faint;
+    sbChartCtx.textBaseline = "top";
+    sbChartCtx.fillText("agents / live sources / mean greed", 3 * dpr, pad);
+  }
+
+  function sbDraw() {
+    var st = SB.stats();
+    sbDrawWorld();
+    sbDrawChart();
+    document.getElementById("sb-tick").textContent = st.tick.toLocaleString();
+    document.getElementById("sb-pop").textContent = st.pop.toLocaleString();
+    document.getElementById("sb-src").textContent =
+      st.src.toLocaleString() + " / " + st.slots.toLocaleString();
+    document.getElementById("sb-greed").textContent = st.pop ? st.greed.toFixed(3) : "—";
+    document.getElementById("sb-fam").textContent =
+      st.families.toLocaleString() + " / " + st.founders.toLocaleString();
+    var vd = sbVerdict(st);
+    var vEl = document.getElementById("sb-verdict");
+    vEl.textContent = vd[0];
+    vEl.style.color = vd[1];
+    document.getElementById("sb-note").textContent = st.pop === 0
+      ? "Everyone starved. The sources come back; nobody is left to harvest them."
+      : "Same rules as the recorded runs, reimplemented in JavaScript — same seed and sliders give the same run every time.";
+  }
+
+  function sbLoop() {
+    if (!sbPlaying) return;
+    var budget = Number(document.getElementById("sb-speed").value);
+    var t0 = performance.now();
+    for (var i = 0; i < budget; i++) {
+      SB.step();
+      // Never spend more than a frame's worth of time stepping, however high
+      // the speed is set: a stalled tab is worse than a slow simulation.
+      if (performance.now() - t0 > 12) break;
+    }
+    sbDraw();
+    requestAnimationFrame(sbLoop);
+  }
+  function sbSetPlaying(on) {
+    sbPlaying = on;
+    document.getElementById("sb-play").textContent = on ? "Pause" : "Run";
+    if (on) requestAnimationFrame(sbLoop);
+  }
+
+  SB_CTRL.forEach(function (c) {
+    document.getElementById(c[0]).addEventListener("input", sbReset);
+  });
+  document.getElementById("sb-play").addEventListener("click", function () { sbSetPlaying(!sbPlaying); });
+  document.getElementById("sb-reset").addEventListener("click", sbReset);
+  document.getElementById("sb-dice").addEventListener("click", function () {
+    document.getElementById("s-seed").value = String(1 + Math.floor(Math.random() * 9999));
+    sbReset();
+  });
+  window.addEventListener("resize", function () {
+    clearTimeout(rt);
+    rt = setTimeout(function () { drawStrip(); render(); sbDraw(); }, 120);
+  });
+
+  sbReset();
 })();
 </script>
