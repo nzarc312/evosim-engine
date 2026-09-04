@@ -215,7 +215,7 @@
 
   .sandstat { grid-template-columns: repeat(6, 1fr); }
   @media (max-width: 620px) { .sandstat { grid-template-columns: repeat(3, 1fr); } }
-  .sandchart { display: block; width: 100%; height: 64px; border-radius: 2px; }
+  .sandchart { display: block; width: 100%; height: 72px; border-radius: 2px; }
   .sandnote { margin: 0; font-size: 11.5px; color: var(--faint); }
 
   .tip {
@@ -1399,32 +1399,45 @@
     var box = sbChart.getBoundingClientRect();
     var dpr = Math.min(window.devicePixelRatio || 1, 2);
     var Wd = Math.max(1, Math.round((box.width || 400) * dpr));
-    var Hd = Math.max(1, Math.round(64 * dpr));
+    var Hd = Math.max(1, Math.round(72 * dpr));
     if (sbChart.width !== Wd || sbChart.height !== Hd) { sbChart.width = Wd; sbChart.height = Hd; }
     sbChartCtx.clearRect(0, 0, Wd, Hd);
     if (h.t.length < 2) return;
 
-    var lanes = [[h.pop, cssVar("--ink")], [h.src, cssVar("--biomass")], [h.gr, cssVar("--greedy")]];
-    var pad = 3 * dpr, lane = (Hd - pad * 2) / 3, gap = 2 * dpr;
+    // Lane names live in a reserved gutter, not on top of the plot. The first
+    // version drew one caption over the lines, which clipped straight through
+    // them as soon as the population climbed.
+    var gutter = 74 * dpr;
+    var lanes = [["agents", h.pop, cssVar("--ink")],
+                 ["sources", h.src, cssVar("--biomass")],
+                 ["greed", h.gr, cssVar("--greedy")]];
+    var pad = 3 * dpr, lane = (Hd - pad * 2) / lanes.length, gap = 2 * dpr;
+    var plotW = Wd - gutter - 4 * dpr;
+
     lanes.forEach(function (L, li) {
-      var v = L[0], max = 0;
+      var name = L[0], v = L[1], col = L[2];
+      var y0 = pad + lane * li, hh = lane - gap;
+      var max = 0;
       for (var i = 0; i < v.length; i++) if (v[i] > max) max = v[i];
       if (max <= 0) max = 1;
-      var y0 = pad + lane * li, hh = lane - gap;
+
+      sbChartCtx.font = (9.5 * dpr) + "px 'IBM Plex Mono', monospace";
+      sbChartCtx.fillStyle = PAL.faint;
+      sbChartCtx.textAlign = "right";
+      sbChartCtx.textBaseline = "middle";
+      sbChartCtx.fillText(name + " " + (name === "greed" ? max.toFixed(2) : Math.round(max)),
+                          gutter - 6 * dpr, y0 + hh / 2);
+
       sbChartCtx.beginPath();
       for (var j = 0; j < v.length; j++) {
-        var x = (j / (v.length - 1)) * Wd;
+        var x = gutter + (j / (v.length - 1)) * plotW;
         var y = y0 + hh - (v[j] / max) * hh;
         j ? sbChartCtx.lineTo(x, y) : sbChartCtx.moveTo(x, y);
       }
-      sbChartCtx.strokeStyle = L[1];
+      sbChartCtx.strokeStyle = col;
       sbChartCtx.lineWidth = 1.3 * dpr;
       sbChartCtx.stroke();
     });
-    sbChartCtx.font = (9 * dpr) + "px 'IBM Plex Mono', monospace";
-    sbChartCtx.fillStyle = PAL.faint;
-    sbChartCtx.textBaseline = "top";
-    sbChartCtx.fillText("agents / live sources / mean greed", 3 * dpr, pad);
   }
 
   function sbDraw() {
@@ -1474,6 +1487,13 @@
   document.getElementById("sb-dice").addEventListener("click", function () {
     document.getElementById("s-seed").value = String(1 + Math.floor(Math.random() * 9999));
     sbReset();
+  });
+  window.addEventListener("resize", function () {
+    clearTimeout(rt);
+    rt = setTimeout(function () { drawStrip(); render(); sbDraw(); }, 120);
+  });
+
+  sbReset();
 
   // ---- hover/focus tooltips for the sandbox controls ----
   // A native `title` on the wrapping label does not reliably appear while the
@@ -1647,188 +1667,6 @@
       g.textAlign = "left"; g.textBaseline = "top";
       g.font = (9.5 * dpr) + "px 'IBM Plex Sans Condensed', sans-serif";
       g.fillText("dashed = perfect linear scaling", pad.l + 4 * dpr, pad.t + 2 * dpr);
-    }
-
-    var body = document.getElementById("perfbody");
-    function showTab(k) {
-      Array.prototype.forEach.call(document.querySelectorAll("#perftabs button"),
-        function (b, i) { b.setAttribute("aria-pressed", String(i === k)); });
-      body.innerHTML = "";
-      var wanted = TABS[k][1];
-      PERF.sections.forEach(function (sec) {
-        if (!wanted.some(function (w) { return sec.title.indexOf(w) === 0 || sec.title.indexOf(w) >= 0; })) return;
-        var d = document.createElement("div");
-        d.className = "perfsec";
-        var h = "<h3>" + md(sec.title) + "</h3>";
-        sec.tables.forEach(function (t) { h += renderTable(t); });
-        sec.prose.forEach(function (para) { h += "<p>" + md(para) + "</p>"; });
-        d.innerHTML = h;
-        body.appendChild(d);
-      });
-      if (k === 0 && PERF.curves.length) {
-        var cv = document.createElement("canvas");
-        cv.className = "speedchart";
-        body.insertBefore(cv, body.firstChild);
-        drawSpeedup(cv);
-        window.addEventListener("resize", function () { drawSpeedup(cv); });
-      }
-    }
-
-    TABS.forEach(function (t, i) {
-      var b = document.createElement("button");
-      b.textContent = t[0];
-      b.setAttribute("aria-pressed", "false");
-      b.addEventListener("click", function () { showTab(i); });
-      document.getElementById("perftabs").appendChild(b);
-    });
-    showTab(0);
-  })();
-
-  });
-  window.addEventListener("resize", function () {
-    clearTimeout(rt);
-    rt = setTimeout(function () { drawStrip(); render(); sbDraw(); }, 120);
-  });
-
-  sbReset();
-
-  // ---- hover/focus tooltips for the sandbox controls ----
-  // A native `title` on the wrapping label does not reliably appear while the
-  // pointer is over a range input, which is exactly where people hover, so the
-  // tooltip is drawn rather than delegated to the browser.
-  var tipEl = document.createElement("div");
-  tipEl.className = "tip";
-  tipEl.hidden = true;
-  document.body.appendChild(tipEl);
-
-  function showTip(el) {
-    var text = el.getAttribute("data-tip");
-    if (!text) return;
-    tipEl.textContent = text;
-    tipEl.hidden = false;
-    var r = el.getBoundingClientRect();
-    var tw = tipEl.offsetWidth, th = tipEl.offsetHeight;
-    var left = Math.max(8, Math.min(window.innerWidth - tw - 8, r.left + r.width / 2 - tw / 2));
-    var top = r.top - th - 8;
-    if (top < 8) top = r.bottom + 8;          // flip below when there is no room above
-    tipEl.style.left = left + "px";
-    tipEl.style.top = top + "px";
-  }
-  function hideTip() { tipEl.hidden = true; }
-
-  Array.prototype.forEach.call(document.querySelectorAll("[data-tip]"), function (el) {
-    el.addEventListener("mouseenter", function () { showTip(el); });
-    el.addEventListener("mouseleave", hideTip);
-    el.addEventListener("focusin", function () { showTip(el); });
-    el.addEventListener("focusout", hideTip);
-    // Screen readers get the same text without needing the hover.
-    var input = el.querySelector("input");
-    var name = el.querySelector(".ctlname");
-    if (input && name) {
-      input.setAttribute("aria-label",
-        name.textContent.replace(/\s+/g, " ").trim() + ". " + el.getAttribute("data-tip"));
-    }
-  });
-  window.addEventListener("scroll", hideTip, true);
-
-
-  // ---- performance panel ----
-  // Everything here is rendered from the committed benchmark output, so the
-  // panel and the README quote the same measured numbers and cannot drift.
-  var PERF = P.perf;
-  if (PERF) (function () {
-    function esc(t) { return t.replace(/&/g, "&amp;").replace(/</g, "&lt;"); }
-    function md(t) {
-      return esc(t).replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>")
-                   .replace(/`(.+?)`/g, "<code>$1</code>");
-    }
-    function fmt(n) { return Math.round(n).toLocaleString(); }
-    var H = PERF.head;
-
-    var tiles = [
-      [H.top_speedup ? H.top_speedup.toFixed(2) + "x" : "—",
-       "speedup at 16 threads, " + fmt(H.top_agents || 0) + " agents"],
-      [H.ceiling_n ? fmt(H.ceiling_n) : "—", "agents at 60 Hz, 16 threads"],
-      [H.ceiling_1 ? fmt(H.ceiling_1) : "—", "agents at 60 Hz, 1 thread"],
-      [H.serial_1 !== undefined ? H.serial_1.toFixed(1) + "%" : "—", "measured serial fraction"],
-      [H.grid_speedup ? fmt(H.grid_speedup) + "x" : "—", "grid vs naive neighbour search"]
-    ];
-    document.getElementById("perftiles").innerHTML = tiles.map(function (t) {
-      return '<div class="tile"><div class="num">' + t[0] + '</div><div class="cap">' + t[1] + "</div></div>";
-    }).join("");
-
-    document.getElementById("perfclaim").innerHTML = H.one_hash
-      ? "<b>Every thread count in the table below produced the same 64-bit state hash.</b> " +
-        "The speedup costs nothing in reproducibility: 1 thread and 16 threads agree bit for bit."
-      : "State hashes differed across thread counts.";
-
-    var TABS = [
-      ["Threading", ["Threading scale-up"]],
-      ["60 Hz ceiling", ["Agents sustainable"]],
-      ["Serial fraction", ["Measured serial fraction"]],
-      ["Neighbour search", ["Neighbour search"]],
-      ["Memory", ["Memory layout", "False sharing"]]
-    ];
-
-    function renderTable(t) {
-      var h = "<div class=\"tablewrap\"><table><thead><tr>" +
-              t.headers.map(function (c) { return "<th>" + md(c) + "</th>"; }).join("") +
-              "</tr></thead><tbody>";
-      t.rows.forEach(function (r) {
-        h += "<tr>" + r.map(function (c) { return "<td>" + md(c) + "</td>"; }).join("") + "</tr>";
-      });
-      return h + "</tbody></table></div>";
-    }
-
-    function drawSpeedup(cv) {
-      var box = cv.getBoundingClientRect();
-      var dpr = Math.min(window.devicePixelRatio || 1, 2);
-      var W = Math.max(1, Math.round((box.width || 480) * dpr));
-      var Hh = Math.max(1, Math.round(190 * dpr));
-      if (cv.width !== W || cv.height !== Hh) { cv.width = W; cv.height = Hh; }
-      var g = cv.getContext("2d");
-      g.clearRect(0, 0, W, Hh);
-
-      var pad = { l: 34 * dpr, r: 8 * dpr, t: 8 * dpr, b: 22 * dpr };
-      var maxT = 16, maxS = 16;
-      var x = function (t) { return pad.l + (Math.log2(t) / Math.log2(maxT)) * (W - pad.l - pad.r); };
-      var y = function (v) { return Hh - pad.b - (v / maxS) * (Hh - pad.t - pad.b); };
-
-      // ideal
-      g.strokeStyle = PAL.hair; g.lineWidth = 1 * dpr; g.setLineDash([4 * dpr, 3 * dpr]);
-      g.beginPath(); g.moveTo(x(1), y(1)); g.lineTo(x(maxT), y(maxT)); g.stroke();
-      g.setLineDash([]);
-
-      // axes labels
-      g.font = (9.5 * dpr) + "px 'IBM Plex Mono', monospace";
-      g.fillStyle = PAL.faint;
-      [1, 2, 4, 8, 16].forEach(function (t) {
-        g.textAlign = "center"; g.textBaseline = "top";
-        g.fillText(String(t), x(t), Hh - pad.b + 4 * dpr);
-      });
-      [4, 8, 12, 16].forEach(function (v) {
-        g.textAlign = "right"; g.textBaseline = "middle";
-        g.fillText(v + "x", pad.l - 5 * dpr, y(v));
-        g.strokeStyle = PAL.hair; g.lineWidth = 1 * dpr;
-        g.beginPath(); g.moveTo(pad.l, y(v)); g.lineTo(W - pad.r, y(v)); g.stroke();
-      });
-      g.textAlign = "left"; g.textBaseline = "top";
-      g.fillText("threads", pad.l, Hh - pad.b + 4 * dpr);
-
-      PERF.curves.forEach(function (c, ci) {
-        g.strokeStyle = ci === 0 ? cssVar("--prudent") : cssVar("--greedy");
-        g.lineWidth = 1.8 * dpr;
-        g.beginPath();
-        c.threads.forEach(function (t, i) { i ? g.lineTo(x(t), y(c.speedup[i])) : g.moveTo(x(t), y(c.speedup[i])); });
-        g.stroke();
-        g.fillStyle = g.strokeStyle;
-        c.threads.forEach(function (t, i) {
-          g.beginPath(); g.arc(x(t), y(c.speedup[i]), 2.6 * dpr, 0, 6.28318); g.fill();
-        });
-        g.textAlign = "right"; g.textBaseline = "bottom";
-        g.font = (10 * dpr) + "px 'IBM Plex Sans Condensed', sans-serif";
-        g.fillText(fmt(c.agents) + " agents", x(16) - 3 * dpr, y(c.speedup[c.speedup.length - 1]) - 5 * dpr);
-      });
     }
 
     var body = document.getElementById("perfbody");
