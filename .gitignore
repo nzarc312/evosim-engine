@@ -16,3 +16,4 @@ analysis/experiments/sweep_series.csv
 # engine. Kept locally, never published.
 analysis/build_resume.py
 .DS_Store
+analysis/update_resume.py
