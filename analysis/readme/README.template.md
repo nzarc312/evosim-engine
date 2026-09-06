@@ -15,6 +15,10 @@ maxing a trait is fatal rather than free.
 
 The evolution is the demo. The engine is the point.
 
+**[▶ Run it in your browser](https://nzarc312.github.io/evosim-engine/)** — four
+recorded runs, a live sandbox you can drive with sliders, and the engine's
+measured performance. No install.
+
 ```bash
 cmake -B build && cmake --build build
 ./build/evosim --seed 42 --ticks 10000 --thread-sweep    # proves the claim above
@@ -392,7 +396,7 @@ Three more results, all in
 
 ### The timeline viewer
 
-[**Open the interactive timeline →**](https://claude.ai/code/artifact/fa9988c9-9e23-4d47-b701-2dc5740358b7)
+[**Open the interactive timeline →**](https://nzarc312.github.io/evosim-engine/)
 
 Four runs side by side, sharing one cursor so scrubbing compares the same tick
 across all of them: three pure strategies (founder greed 0.12, 0.50, 0.90) plus
