@@ -26,6 +26,65 @@ cmake -B build && cmake --build build
 
 ---
 
+## In plain terms
+
+**What it is.** A little world, 500 by 500, with a few thousand food plants and a
+thousand creatures. Each creature wanders, eats, spends energy, has offspring
+that inherit its traits with small random changes, and eventually dies. Nobody
+tells them how to behave — the traits that happen to work spread, and the ones
+that don't die out. That's evolution, running as a program.
+
+**The engineering problem.** Running that on all 16 cores of a processor instead
+of 1 makes it faster, but normally it also makes it *unrepeatable*: cores finish
+in a slightly different order each time, tiny rounding differences creep in, and
+two runs of the identical setup drift apart. This project's whole point is that
+they don't. Run it on 1 core or 16 and you get **the same answer, down to the
+last digit** — which makes it 5× more world in the same time budget with nothing
+given up for it.
+
+- On one core it can handle about **91,000 creatures** while still updating 60
+  times a second — smooth, like a game. On sixteen cores, **485,000**.
+- Finding "what food is near me" was rewritten from checking every plant against
+  every creature to a smarter method: **1,550× faster** at 50,000 creatures.
+
+**The interesting result.** Food plants aren't just items to pick up — they
+regrow, and if a creature strips one too far, it dies permanently. Each creature
+inherits how *greedy* it is: what fraction of a plant it takes per visit. That
+turns out to matter enormously:
+
+- Creatures that take **about 15% or less** live off the land indefinitely and
+  never lose a single plant.
+- Creatures that take **20% or more** wipe out their own food supply and starve.
+  There's a sharp line between the two — 0.20 fails just as badly as 1.00.
+- Put both kinds in the same world and **the greedy ones win at first**: they
+  out-breed the careful ones and the population booms. Then the food runs out
+  underneath them, and they die with it. Within 3,000 steps the greedy
+  bloodlines are extinct and the careful ones inherit a recovering world.
+- A careful **minority of just 10%** is enough to take over. Across 60 runs of
+  that head-to-head, the careful strategy won 60 times.
+- But the winners pay for it. The crash is severe enough that only a few dozen
+  creatures survive out of a thousand, and of the 1,000 original family lines,
+  only 23 to 39 remain.
+
+**What would change the answer.** The model leaves out plenty, and each omission
+would likely shift the result:
+
+- Creatures can't remember or learn — they only react to what's in front of
+  them. A creature that remembered which patches it had exhausted would harvest
+  very differently.
+- There are no predators, disease, or seasons. Food regrows at a steady rate all
+  the time, so the only pressure is competition with each other.
+- Creatures can't communicate, so they can't agree to leave a plant alone. Real
+  commons are often saved by exactly that kind of arrangement.
+- Offspring are born exactly where the parent is standing. If they scattered
+  further, a greedy family wouldn't be left living in the patch it ruined, and
+  restraint would pay off less.
+- Greediness is one fixed number per creature. One that adjusted its appetite to
+  how much food was actually left would be a different — and probably much more
+  successful — strategy.
+
+---
+
 ## Results
 
 Measured on an Apple M5 Pro (6 performance + 12 efficiency cores, 24 GB),
@@ -467,33 +526,6 @@ the timestep is ever changed.
   so the build only takes that path on dense grids and falls back to a serial
   scatter at this simulation's food density. A blocked or sparse histogram would
   let the parallel path apply generally.
-
-## Résumé summary
-
-Every bracketed value in the spec's template has been replaced with a measured
-one, and one bullet was replaced outright: the spec proposed claiming a
-false-sharing improvement, which this hardware does not support (see above).
-
-> **EvoSim — Deterministic Parallel Evolution Simulator** | C++17, CMake, Python
->
-> - Built a fixed-timestep simulation engine producing bit-identical state
->   hashes across runs, build configurations, **and thread counts**, using
->   counter-based stateless RNG and fixed-order reductions over a thread-count-
->   independent chunk decomposition to eliminate scheduling-dependent results.
-> - Parallelised the simulation step across a hand-rolled thread pool and
->   reusable barrier, reaching **{{sp16}} at 16 threads on 200,000 agents**
->   ({{ms1}} → {{ms16}} ms/tick) with a directly measured serial fraction of
->   {{serial1}}%, and identified core heterogeneity rather than Amdahl as the
->   binding constraint. Raised the population sustainable at 60 Hz from
->   {{ceil_1}} to {{ceil_n}} agents.
-> - Implemented a counting-sort spatial grid for neighbour queries, cutting
->   per-tick proximity checks from O(n²) to near-linear — **{{grid_speedup}}x**
->   at 50,000 agents — and raising the agent count sustainable at 60 Hz from
->   {{naive60}} to {{grid60}}.
-> - Traced a debug-vs-release hash divergence to clang fusing `sin`/`cos` into
->   `__sincos_stret` at `-O3`, and replaced libm's transcendentals with
->   in-house implementations, making output reproducible across optimisation
->   levels and platforms.
 
 ## Layout
 
