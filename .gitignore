@@ -18,3 +18,8 @@ analysis/experiments/sweep_series.csv
 analysis/build_resume.py
 .DS_Store
 analysis/update_resume.py
+
+# README tooling: the template plus the script that splices measured benchmark
+# numbers into it. Local scaffolding, not part of the engine — the generated
+# README.md is what ships.
+analysis/readme/
