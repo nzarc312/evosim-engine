@@ -6,7 +6,8 @@ __pycache__/
 /*.csv
 !analysis/plots/
 
-# Generated viewer (6+ MiB); rebuild with analysis/make_viewer.py
+# Working copy of the viewer; the published one is committed at docs/index.html
+# so GitHub Pages can serve it. Rebuild both with analysis/make_viewer.py.
 analysis/viewer.html
 # Sampled time series from the sweep: 6.8 MB and fully regenerable with
 # `evosim_sweep`. The 128 KB summary next to it is committed.
